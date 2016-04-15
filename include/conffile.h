@@ -26,6 +26,7 @@
 #define _CONFFILE_H
 
 #include <stdio.h>
+#include <stdlib.h>
 
 struct section;
 struct pair;
@@ -44,8 +45,8 @@ struct conffile {
 
 /* Section of a configuration file
  * Members:
- * name      : (char *) The NUL-terminated name of this section. May be NULL
- *             for the "global" section.
+ * name      : (char *) The name of this section. May be NULL for the
+ *             "global" section.
  * prev, next: (struct section *) Linked list interconnection.
  * data      : (struct pair *) The first data item in this section.
  */
@@ -57,14 +58,40 @@ struct section {
 
 /* A single name-value pair
  * Members:
- * key       : (char *) The key of this pair.
- * value     : (char *) The value of this pair.
+ * key       : (char *) The key of this pair. Must not be NULL.
+ * value     : (char *) The value of this pair. Must not be NULL.
  * prev, next: (struct pair *) Linked list interconnection.
  */
 struct pair {
-    char *key;
-    char *value;
+    char *key, *value;
     struct pair *prev, *next;
 };
+
+/* Allocate and initialize a struct conffile with the given parameters
+ * Returns a pointer the newly-created structure, or NULL if allocation fails
+ */
+struct conffile *conffile_new(FILE *fp);
+
+/* Allocate and initialize a struct section with the given parameters
+ * Returns a pointer the newly-created structure, or NULL if allocation fails
+ */
+struct section *section_new(char *name);
+
+/* Allocate and initialize a struct pair with the given parameters
+ * Returns a pointer the newly-created structure, or NULL if allocation fails
+ */
+struct pair *pair_new(char *key, char *value);
+
+/* Add the given section to the given file */
+void conffile_add(struct conffile *file, struct section *section);
+
+/* Add the given pair to the given section */
+void section_add(struct section *section, struct pair *pair);
+
+/* Append the new section to a given list, choosing the correct position */
+void section_append(struct section *list, struct section *section);
+
+/* Append the new pair to a given list, choosing the correct position */
+void pair_append(struct pair *list, struct pair *pair);
 
 #endif

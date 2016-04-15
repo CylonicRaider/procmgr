@@ -35,7 +35,7 @@ ssize_t readline(FILE *f, char **buffer, size_t *size) {
             break;
         }
         /* Append to buffer. */
-        buffer[buflen++] = ch;
+        (*buffer)[buflen++] = ch;
         /* Do not abort here to allow space allocation to run again for the
          * terminating NUL. */
         if (ch == LF) done = 1;
