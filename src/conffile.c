@@ -1,7 +1,10 @@
 /* procmgr -- init-like process manager
  * https://github.com/CylonicRaider/procmgr */
 
+#include <errno.h>
+#include <stdio.h>
 #include <string.h>
+#include "readline.h"
 #include "conffile.h"
 
 /* Allocate and initialize a struct conffile with the given parameters */
@@ -27,6 +30,82 @@ struct pair *pair_new(char *key, char *value) {
     ret->key = key;
     ret->value = value;
     return ret;
+}
+
+/* Deinitialize the given structure */
+void conffile_del(struct conffile *file) {
+    if (file->fp) fclose(file->fp);
+    file->fp = NULL;
+    if (file->sections) section_free(file->sections);
+    file->sections = NULL;
+}
+
+/* Deinitialize the given structure */
+void section_del(struct section *section) {
+    free(section->name);
+    if (section->prev) section->prev->next = NULL;
+    if (section->next) section->next->prev = NULL;
+    section->name = NULL;
+    section->prev = NULL;
+    section->next = NULL;
+    if (section->data) pair_free(section->data);
+    section->data = NULL;
+}
+
+/* Deinitialize the given structure */
+void pair_del(struct pair *pair) {
+    free(pair->key);
+    free(pair->value);
+    if (pair->prev) pair->prev->next = NULL;
+    if (pair->next) pair->next->prev = NULL;
+    pair->key = NULL;
+    pair->value = NULL;
+    pair->prev = NULL;
+    pair->next = NULL;
+}
+
+/* Deinitialize and free the given structure */
+void conffile_free(struct conffile *file) {
+    conffile_del(file);
+    free(file);
+}
+
+/* Deinitialize and free the given structure */
+void section_free(struct section *section) {
+    struct section *prev = section->prev, *next = section->next, *cur;
+    while (prev) {
+        cur = prev;
+        prev = prev->prev;
+        section_del(cur);
+        free(cur);
+    }
+    while (next) {
+        cur = next;
+        next = next->next;
+        section_del(cur);
+        free(cur);
+    }
+    section_del(section);
+    free(section);
+}
+
+/* Deinitialize and free the given structure */
+void pair_free(struct pair *pair) {
+    struct pair *prev = pair->prev, *next = pair->next, *cur;
+    while (prev) {
+        cur = prev;
+        prev = prev->prev;
+        pair_del(cur);
+        free(cur);
+    }
+    while (next) {
+        cur = next;
+        next = next->next;
+        pair_del(cur);
+        free(cur);
+    }
+    pair_del(pair);
+    free(pair);
 }
 
 /* Add the given section to the given file */
@@ -82,4 +161,82 @@ void pair_append(struct pair *list, struct pair *pair) {
     found->next = pair;
     if (pair->next) pair->next->prev = pair;
     pair->prev = found;
+}
+
+/* Parse the file of the given struct conffile */
+int conffile_parse(struct conffile *file, int *curline) {
+    char *buffer = NULL, *line, *eq;
+    size_t buflen, linelen;
+    int ret = 0;
+    struct section cursec = { NULL, NULL, NULL, NULL };
+    struct pair curpair = { NULL, NULL, NULL, NULL }, *pair;
+    /* Initialize curline */
+    if (curline) *curline = 0;
+    /* Prevent memory leak */
+    if (file->sections) {
+        section_free(file->sections);
+        file->sections = NULL;
+    }
+    /* Read the file linewise. */
+    for (;;) {
+        if (curline) *curline++;
+        /* Actually read line. */
+        linelen = readline(file->fp, &buffer, &buflen);
+        if (linelen == 0) goto end;
+        if (linelen == -1) goto error;
+        /* Check for embedded NUL-s. */
+        if (strlen(buffer) != linelen) {
+            errno = EINVAL;
+            goto error;
+        }
+        /* Remove whitespace. */
+        line = strip_whitespace(buffer, linelen);
+        linelen = strlen(line);
+        /* Lines from here on are "significant". */
+        ret++;
+        /* Ignore empty lines and comments. */
+        if (linelen == 0 || line[0] == '#' || line[0] == ';')
+            continue;
+        /* Check for section idenfitier. */
+        if (line[0] == '[' && line[linelen - 1] == ']') {
+            /* Drain section into file structure. */
+            struct section *section = malloc(sizeof(cursec));
+            if (section == NULL) goto error;
+            *section = cursec;
+            conffile_add(file, section);
+            /* Start new section. */
+            cursec.data = NULL;
+            line[linelen - 1] = '\0';
+            cursec.name = strdup(line + 1);
+            if (! cursec.name) goto error;
+            continue;
+        }
+        /* Parse a key-value pair. */
+        eq = strchr(line, '=');
+        if (eq == NULL) {
+            errno = EINVAL;
+            goto error;
+        }
+        *eq++ = '\0';
+        /* Extract key and value. */
+        curpair.key = strdup(strip_whitespace(line, strlen(line)));
+        if (curpair.key == NULL) goto error;
+        curpair.value = strdup(strip_whitespace(eq, strlen(eq)));
+        if (curpair.value == NULL) goto error;
+        /* Add to current section. */
+        pair = malloc(sizeof(curpair));
+        if (pair == NULL) goto error;
+        *pair = curpair;
+        section_add(&cursec, pair);
+        curpair.key = NULL;
+        curpair.value = NULL;
+    }
+    error:
+        ret = -1;
+    end:
+        /* Deallocate structures if necessary. */
+        free(buffer);
+        section_del(cursec);
+        pair_del(curpair);
+        return ret;
 }

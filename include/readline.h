@@ -29,9 +29,9 @@ ssize_t readline(FILE *f, char **buffer, size_t *size);
  * terminated portions from larger buffers); leading whitespace is handled by
  * returning a pointer to the first non-whitespace character.
  * len specifies the length of the string, and may be used to select
- * substrings. Embedded NUL-s are ignored; thus, determining the length of
- * the substring would require about as much effort as writing a custom
- * variant of this function.
+ * substrings. Embedded NUL-s cause unpredictable behavior; thus, determining
+ * the length of the substring would require about as much effort as writing
+ * a custom variant of this function.
  * Returns a pointer to the beginning of the trimmed string.
  */
 char *strip_whitespace(char *input, size_t len);
