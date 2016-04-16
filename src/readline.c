@@ -46,13 +46,15 @@ ssize_t readline(FILE *f, char **buffer, size_t *size) {
 }
 
 /* Remove leading and trailing whitespace from a string */
-char *strip_whitespace(char *input, size_t len) {
+char *strip_whitespace(char *string) {
+    /* Determine string length. */
+    size_t len = strlen(string);
     /* Find left non-space character. */
-    while (len && isspace(input[len - 1])) len--;
+    while (len && isspace(string[len - 1])) len--;
     /* Replace character after it with NUL. */
-    input[len] = '\0';
+    string[len] = '\0';
     /* Skip leading whitespace. */
-    while (*input && isspace(*input)) input++;
+    while (*string && isspace(*string)) string++;
     /* Return result. */
-    return input;
+    return string;
 }

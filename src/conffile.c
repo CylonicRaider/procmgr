@@ -190,7 +190,7 @@ int conffile_parse(struct conffile *file, int *curline) {
             goto error;
         }
         /* Remove whitespace. */
-        line = strip_whitespace(buffer, linelen);
+        line = strip_whitespace(buffer);
         linelen = strlen(line);
         /* Lines from here on are "significant". */
         ret++;
@@ -219,9 +219,9 @@ int conffile_parse(struct conffile *file, int *curline) {
         }
         *eq++ = '\0';
         /* Extract key and value. */
-        curpair.key = strdup(strip_whitespace(line, strlen(line)));
+        curpair.key = strdup(strip_whitespace(line));
         if (curpair.key == NULL) goto error;
-        curpair.value = strdup(strip_whitespace(eq, strlen(eq)));
+        curpair.value = strdup(strip_whitespace(eq));
         if (curpair.value == NULL) goto error;
         /* Add to current section. */
         pair = malloc(sizeof(curpair));
