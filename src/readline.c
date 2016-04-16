@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 #include "readline.h"
 
 #define DEFAULT_BUFSIZE 128
@@ -16,12 +17,14 @@ ssize_t readline(FILE *f, char **buffer, size_t *size) {
     clearerr(f);
     for (;;) {
         /* (Re)allocate buffer if necessary. */
-        if (! *buffer) {
+        if (*buffer == NULL) {
             *size = DEFAULT_BUFSIZE;
             *buffer = malloc(*size);
+            if (*buffer == NULL) return -1;
         } else if (*size <= buflen) {
             *size *= 2;
             *buffer = realloc(*buffer, *size);
+            if (*buffer == NULL) return -1;
         }
         /* Abort if necessary and space for the NUL is there. */
         if (done) break;
@@ -41,7 +44,7 @@ ssize_t readline(FILE *f, char **buffer, size_t *size) {
         if (ch == LF) done = 1;
     }
     /* Done. */
-    buffer[buflen] = '\0';
+    (*buffer)[buflen] = '\0';
     return buflen;
 }
 

@@ -134,8 +134,9 @@ void section_append(struct section *list, struct section *section) {
     /* Scan for section with same name */
     for (cur = list; cur != NULL; last = cur, cur = cur->next) {
         /* Take that! */
-        if ((section->name == NULL) ? cur->name == NULL :
-                strcmp(section->name, cur->name) == 0)
+        if ((section->name == NULL && cur->name == NULL) ||
+                (section->name && cur->name &&
+                 strcmp(section->name, cur->name) == 0))
             found = cur;
     }
     /* Yes, this *will* segfault (if used improperly). */
@@ -168,7 +169,7 @@ int conffile_parse(struct conffile *file, int *curline) {
     char *buffer = NULL, *line, *eq;
     size_t buflen, linelen;
     int ret = 0;
-    struct section cursec = { NULL, NULL, NULL, NULL };
+    struct section cursec = { NULL, NULL, NULL, NULL }, *section;
     struct pair curpair = { NULL, NULL, NULL, NULL }, *pair;
     /* Initialize curline */
     if (curline) *curline = 0;
@@ -179,10 +180,10 @@ int conffile_parse(struct conffile *file, int *curline) {
     }
     /* Read the file linewise. */
     for (;;) {
-        if (curline) *curline++;
+        if (curline) (*curline)++;
         /* Actually read line. */
         linelen = readline(file->fp, &buffer, &buflen);
-        if (linelen == 0) goto end;
+        if (linelen == 0) break;
         if (linelen == -1) goto error;
         /* Check for embedded NUL-s. */
         if (strlen(buffer) != linelen) {
@@ -200,7 +201,7 @@ int conffile_parse(struct conffile *file, int *curline) {
         /* Check for section idenfitier. */
         if (line[0] == '[' && line[linelen - 1] == ']') {
             /* Drain section into file structure. */
-            struct section *section = malloc(sizeof(cursec));
+            section = malloc(sizeof(cursec));
             if (section == NULL) goto error;
             *section = cursec;
             conffile_add(file, section);
@@ -231,12 +232,55 @@ int conffile_parse(struct conffile *file, int *curline) {
         curpair.key = NULL;
         curpair.value = NULL;
     }
+    /* Add last section to file as well. */
+    section = malloc(sizeof(cursec));
+    if (section == NULL) goto error;
+    *section = cursec;
+    conffile_add(file, section);
+    cursec.data = NULL;
+    cursec.name = NULL;
+    goto end;
+    /* An error happened. */
     error:
         ret = -1;
     end:
         /* Deallocate structures if necessary. */
         free(buffer);
-        section_del(cursec);
-        pair_del(curpair);
+        section_del(&cursec);
+        pair_del(&curpair);
         return ret;
+}
+
+/* Write the given set of configuration data to the given I/O stream */
+int conffile_write(FILE *file, struct conffile *cfile) {
+    int written = 0, w;
+    struct section *cur;
+    for (cur = cfile->sections; cur != NULL; cur = cur->next) {
+        w = section_write(file, cur);
+        if (w < 0) return -1;
+        written += w;
+    }
+    return written;
+}
+
+/* Write the given section (with a header if necessary) to file */
+int section_write(FILE *file, struct section *section) {
+    int written = 0, w;
+    struct pair *cur;
+    if (section->name) {
+        w = fprintf(file, "\n[%s]\n", section->name);
+        if (w < 0) return -1;
+        written += w;
+    }
+    for (cur = section->data; cur != NULL; cur = cur->next) {
+        w = pair_write(file, cur);
+        if (w < 0) return -1;
+        written += w;
+    }
+    return written;
+}
+
+/* Write the given configuration pair to file */
+int pair_write(FILE *file, struct pair *pair) {
+    return fprintf(file, "%s=%s\n", pair->key, pair->value);
 }

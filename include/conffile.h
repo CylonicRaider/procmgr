@@ -133,4 +133,21 @@ void pair_append(struct pair *list, struct pair *pair);
  *      are included in file. */
 int conffile_parse(struct conffile *file, int *curline);
 
+/* Write the given set of configuration data to the given I/O stream
+ * It is rendered in a format such that it could be parsed again.
+ * Sections are preceded with empty lines for aesthetical reasons.
+ * The return value is the amount of bytes written, or -1 in case of
+ * error. */
+int conffile_write(FILE *file, struct conffile *cfile);
+
+/* Write the given section (with a header if necessary) to file
+ * The return value is the amount of bytes written, or -1 in case of
+ * error. */
+int section_write(FILE *file, struct section *section);
+
+/* Write the given configuration pair to file
+ * The return value is the amount of bytes written, or a negative value in
+ * case of error. */
+int pair_write(FILE *file, struct pair *pair);
+
 #endif
