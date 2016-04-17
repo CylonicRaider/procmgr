@@ -6,7 +6,7 @@
  * section introducers, or value assignments.
  * Leading and trailing whitespace (including the line terminator) is
  * ignored.
- * Blank lines contain nothing and are ignored.
+ * Blank lines contain nothing (but the terminator) and are ignored.
  * Comments are introduced by number signs (#) or semicolons (;), and are
  * ignored as well. Comments must be on their own lines.
  * Section introducers consist of an arbitrary identifier enclosed in square
