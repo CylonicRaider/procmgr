@@ -169,15 +169,11 @@ int conffile_parse(struct conffile *file, int *curline) {
     char *buffer = NULL, *line, *eq;
     size_t buflen, linelen;
     int ret = 0;
+    struct conffile curfile = { NULL, NULL };
     struct section cursec = { NULL, NULL, NULL, NULL }, *section;
     struct pair curpair = { NULL, NULL, NULL, NULL }, *pair;
     /* Initialize curline */
     if (curline) *curline = 0;
-    /* Prevent memory leak */
-    if (file->sections) {
-        section_free(file->sections);
-        file->sections = NULL;
-    }
     /* Read the file linewise. */
     for (;;) {
         if (curline) (*curline)++;
@@ -204,7 +200,7 @@ int conffile_parse(struct conffile *file, int *curline) {
             section = malloc(sizeof(cursec));
             if (section == NULL) goto error;
             *section = cursec;
-            conffile_add(file, section);
+            conffile_add(&curfile, section);
             /* Start new section. */
             cursec.data = NULL;
             line[linelen - 1] = '\0';
@@ -239,6 +235,10 @@ int conffile_parse(struct conffile *file, int *curline) {
     conffile_add(file, section);
     cursec.data = NULL;
     cursec.name = NULL;
+    /* Swap old configuration with new one */
+    if (file->sections)
+        section_free(file->sections);
+    file->sections = curfile->sections;
     goto end;
     /* An error happened. */
     error:
@@ -246,6 +246,7 @@ int conffile_parse(struct conffile *file, int *curline) {
     end:
         /* Deallocate structures if necessary. */
         free(buffer);
+        conffile_del(&curfile);
         section_del(&cursec);
         pair_del(&curpair);
         return ret;

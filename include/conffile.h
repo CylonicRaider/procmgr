@@ -119,8 +119,9 @@ void section_append(struct section *list, struct section *section);
 void pair_append(struct pair *list, struct pair *pair);
 
 /* Parse the file of the given struct conffile
- * The old data in file are deallocated first. If the same should be parsed
- * multiple times, it has to be rewound before repeated parsings.
+ * If the same should be parsed multiple times, it has to be rewound before
+ * repeated parsings. The configuration data are swapped after parsing has
+ * succeeded, thus, file will not be in an inconsistent state after the call.
  * If curline is not NULL, it will be set the 1-based number of the line
  * currently being parsed; in case of errors appearing, it can be used to
  * provide more meaningful information.
@@ -129,8 +130,7 @@ void pair_append(struct pair *list, struct pair *pair);
  * include EIO if something happens while reading itself, ENOMEM in case of
  * an OOM, or EINVAL if the syntax is invalid).
  * NOTE that syntax errors are considered fatal; in case those (or any other
- *      errors) appear, only the sections completely successfully parsed
- *      are included in file. */
+ *      errors) appear, file remains unchanged. */
 int conffile_parse(struct conffile *file, int *curline);
 
 /* Write the given set of configuration data to the given I/O stream
