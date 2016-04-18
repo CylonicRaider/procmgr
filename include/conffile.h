@@ -118,6 +118,26 @@ void section_append(struct section *list, struct section *section);
 /* Append the new pair to a given list, choosing the correct position */
 void pair_append(struct pair *list, struct pair *pair);
 
+/* Return the same-named section preceding this one, if any, or NULL
+ * For obtaining the precedessor section regardless of name, use the
+ * corresponding structure member. */
+struct section *section_prev(struct section *section);
+
+/* Return the same-named section following this one, if any, or NULL
+ * For obtaining the subsequent section regardless of name, use the
+ * corresponding structure member. */
+struct section *section_next(struct section *section);
+
+/* Return the same-keyed pair preceding this one, if any, or NULL
+ * For obtaining the precedessor pair regardless of key, use the
+ * corresponding structure member. */
+struct pair *pair_prev(struct pair *pair);
+
+/* Return the same-named pair following this one, if any, or NULL
+ * For obtaining the subsequent pair regardless of key, use the corresponding
+ * structure member. */
+struct pair *pair_next(struct pair *pair);
+
 /* Parse the file of the given struct conffile
  * If the same should be parsed multiple times, it has to be rewound before
  * repeated parsings. The configuration data are swapped after parsing has

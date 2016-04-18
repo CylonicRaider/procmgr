@@ -164,6 +164,44 @@ void pair_append(struct pair *list, struct pair *pair) {
     pair->prev = found;
 }
 
+/* Return the same-named section preceding this one, if any, or NULL */
+struct section *section_prev(struct section *section) {
+    struct section *prev = section->prev;
+    if (prev == NULL) {
+        return NULL;
+    } else if (section->name == NULL) {
+        return (prev->name == NULL) ? prev : NULL;
+    } else {
+        return (prev->name != NULL && strcmp(section->name,
+            prev->name) == 0) ? prev : NULL;
+    }
+}
+
+/* Return the same-named section following this one, if any, or NULL */
+struct section *section_next(struct section *section) {
+    struct section *next = section->next;
+    if (next == NULL) {
+        return NULL;
+    } else if (section->name == NULL) {
+        return (next->name == NULL) ? next : NULL;
+    } else {
+        return (next->name != NULL && strcmp(section->name,
+            next->name) == 0) ? next : NULL;
+    }
+}
+
+/* Return the same-keyed pair preceding this one, if any, or NULL */
+struct pair *pair_prev(struct pair *pair) {
+    struct pair *prev = pair->prev;
+    return (prev != NULL && strcmp(pair->key, prev->key) == 0) ? prev : NULL;
+}
+
+/* Return the same-named pair following this one, if any, or NULL */
+struct pair *pair_next(struct pair *pair) {
+    struct pair *next = pair->next;
+    return (next != NULL && strcmp(pair->key, next->key) == 0) ? next : NULL;
+}
+
 /* Parse the file of the given struct conffile */
 int conffile_parse(struct conffile *file, int *curline) {
     char *buffer = NULL, *line, *eq;
