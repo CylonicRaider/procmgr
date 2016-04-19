@@ -8,6 +8,9 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
+/* Default location of communication socket. */
+#define SOCKET_PATH "/var/run/procmgr"
+
 /* The program should be running now. If it dies while this flag is true,
  * it is restarted. */
 #define PROG_RUNNING 1
@@ -21,13 +24,17 @@ struct action;
 /* Root configuration structure
  * Members:
  * socketpath: (char *) The filesystem path of the communication socket.
+ *             Defaults to SOCKET_PATH.
  * socket    : (int) The (UNIX domain) socket to use for communications.
  *             Bound to by the daemon, connected to by the clients.
+ * conffile  : (struct conffile *) The configuration file underlying this
+ *             configuration. May be NULL.
  * programs  : (struct program *) A linked list of the programs configured
  *             and/or used. */
 struct config {
     char *socketpath;
     int socket;
+    struct conffile *conffile;
     struct program *programs;
 };
 
@@ -70,14 +77,20 @@ struct program {
 };
 
 /* Possible action to be performed on a program
- * The command is run by ACTION_SHELL (/bin/sh), appended after a "-c"
- * parameter; additional positional arguments are passed after it. The
- * execution environment is empty, save for the following variables:
- * PATH=/bin:/usr/bin -- The path to get executables from.
+ * The command is run by ACTION_SHELL, appended after a "-c" parameter;
+ * additional positional arguments are passed after it. The execution
+ * environment is empty, save for the following variables:
+ * PATH=/bin:/usr/bin -- The path to get executables from. All other ones
+ *                       must be fetched by absolute path.
+ * SHELL              -- The shell used to run the command. Equal to the
+ *                       ACTION_SHELL constant.
  * PROGNAME           -- The name of the current program.
  * ACTION             -- The name of the action being executed now.
  * PID                -- The PID of the process of the current program, or
  *                       the empty string if none.
+ * The PID of the process that is running the "start" action is recorded as
+ * the PID of the program as a whole; thus, the command for that action
+ * should preferably exec() the actual service to be run.
  * Members:
  * command  : (char *) Shell command to be invoked when the action is
  *            requested.
@@ -93,5 +106,56 @@ struct action {
     int allow_uid;
     int allow_gid;
 };
+
+/* Create a new runtime configuration based on the given configuration file
+ * If file is NULL, the configuration is set to all defaults. If it is not,
+ * the settings from the file are applied on top of that. Initially, no
+ * programs are started.
+ * If parsing fails, a message is written to stdout (unless quiet is false),
+ * NULL is returned and errno is set as appropriately as possible. */
+struct config *config_new(struct conffile *file, int quiet);
+
+/* Deallocate all the underlying structures
+ * Members that should not be deallocated must be extraced manually before
+ * calling this. All others are properly disposed of and reset to placeholder
+ * values. */
+void config_del(struct config *conf);
+
+/* Deallocate all the underlying structures and free this one
+ * Equivalent to config_del(conf); free(conf);. */
+void config_free(struct config *conf);
+
+/* Re-read the underlying configuration file and merge the new configuration
+ * with the current one
+ * Programs that have vanished from the file and are not running are removed;
+ * such ones that still are running persist until they are stopped; programs
+ * whose configuration values have changed retain their runtime data; new
+ * programs are added to the configuration, and not started.
+ * Returns the amount of programs changed on success (removed ones are count
+ * positively), or -1 on error with errno set, having written a message to
+ * stderr first (if quiet is true). */
+int config_update(struct config *conf, int quiet);
+
+/* Add the given program to the configuration, merging the entries if
+ * necessary */
+void config_add(struct config *conf, struct program *prog);
+
+/* Return the program named by the given string, or NULL if none */
+struct program *config_get(struct config *conf, char *name);
+
+/* Allocate a program using the configuration from the given configuration
+ * section (which may be NULL) */
+struct program *prog_new(struct section *config);
+
+/* Free all the resources underlying the given structure
+ * If any program corresponding to this section is running, nothing happens
+ * to it. */
+void prog_del(struct program *prog);
+
+/* Deallocate the given structure, as well as any others linked to it */
+void prog_free(struct program *prog);
+
+/* Return the action named by name from prog, or NULL if none */
+struct action *prog_action(struct program *prog, char *name);
 
 #endif

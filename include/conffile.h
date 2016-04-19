@@ -68,17 +68,17 @@ struct pair {
 };
 
 /* Allocate and initialize a struct conffile with the given parameters
- * Returns a pointer the newly-created structure, or NULL if allocation
+ * Returns a pointer to the newly-created structure, or NULL if allocation
  * fails. */
 struct conffile *conffile_new(FILE *fp);
 
 /* Allocate and initialize a struct section with the given parameters
- * Returns a pointer the newly-created structure, or NULL if allocation
+ * Returns a pointer to the newly-created structure, or NULL if allocation
  * fails. */
 struct section *section_new(char *name);
 
 /* Allocate and initialize a struct pair with the given parameters
- * Returns a pointer the newly-created structure, or NULL if allocation
+ * Returns a pointer to the newly-created structure, or NULL if allocation
  * fails. */
 struct pair *pair_new(char *key, char *value);
 
