@@ -9,7 +9,7 @@
 #define _CONFIG_H
 
 /* The program should be running now. If it dies while this flag is true,
- * if will be restarted. */
+ * it is restarted. */
 #define PROG_RUNNING 1
 
 /* Shell to invoke actions with. */
