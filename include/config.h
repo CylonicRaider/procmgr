@@ -131,7 +131,7 @@ void config_free(struct config *conf);
  * such ones that still are running persist until they are stopped; programs
  * whose configuration values have changed retain their runtime data; new
  * programs are added to the configuration, and not started.
- * Returns the amount of programs changed on success (removed ones are count
+ * Returns the amount of programs changed on success (removed ones count
  * positively), or -1 on error with errno set, having written a message to
  * stderr first (if quiet is true). */
 int config_update(struct config *conf, int quiet);
