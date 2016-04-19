@@ -118,6 +118,17 @@ void conffile_add(struct conffile *file, struct section *section) {
     }
 }
 
+/* Get the first section with the given name, or NULL */
+struct section *conffile_get(struct conffile *file, char *name) {
+    struct section *cur;
+    for (cur = file->sections; cur != NULL; cur = cur->next) {
+        if ((cur->name == NULL && name == NULL) ||
+                (cur->name && name && strcmp(cur->name, name) == 0))
+            return cur;
+    }
+    return NULL;
+}
+
 /* Add the given pair to the given section */
 void section_add(struct section *section, struct pair *pair) {
     if (section->data == NULL) {
@@ -126,6 +137,16 @@ void section_add(struct section *section, struct pair *pair) {
     } else {
         pair_append(section->data, pair);
     }
+}
+
+/* Get the first pair with the given key, or NULL */
+struct pair *section_get(struct section *section, char *key) {
+    struct pair *cur;
+    for (cur = section->data; cur != NULL; cur = cur->next) {
+        if (strcmp(cur->key, key) == 0)
+            return cur;
+    }
+    return NULL;
 }
 
 /* Append the new section to a given list, choosing the correct position */
@@ -190,6 +211,28 @@ struct section *section_next(struct section *section) {
     }
 }
 
+/* Return the first same-named section in the current sequence */
+struct section *section_first(struct section *section) {
+    struct section *prev = section;
+    if (section == NULL) return NULL;
+    do {
+        section = prev;
+        prev = section_prev(section);
+    } while (prev != NULL);
+    return section;
+}
+
+/* Return the last same-named section in the current sequence */
+struct section *section_last(struct section *section) {
+    struct section *next = section;
+    if (section == NULL) return NULL;
+    do {
+        section = next;
+        next = section_next(section);
+    } while (next != NULL);
+    return section;
+}
+
 /* Return the same-keyed pair preceding this one, if any, or NULL */
 struct pair *pair_prev(struct pair *pair) {
     struct pair *prev = pair->prev;
@@ -200,6 +243,28 @@ struct pair *pair_prev(struct pair *pair) {
 struct pair *pair_next(struct pair *pair) {
     struct pair *next = pair->next;
     return (next != NULL && strcmp(pair->key, next->key) == 0) ? next : NULL;
+}
+
+/* Return the first same-named pair in the current sequence */
+struct pair *pair_first(struct pair *pair) {
+    struct pair *prev = pair;
+    if (pair == NULL) return NULL;
+    do {
+        pair = prev;
+        prev = pair_prev(pair);
+    } while (prev != NULL);
+    return pair;
+}
+
+/* Return the last same-named pair in the current sequence */
+struct pair *pair_last(struct pair *pair) {
+    struct pair *next = pair;
+    if (pair == NULL) return NULL;
+    do {
+        pair = next;
+        next = pair_next(pair);
+    } while (next != NULL);
+    return pair;
 }
 
 /* Parse the file of the given struct conffile */
@@ -276,7 +341,7 @@ int conffile_parse(struct conffile *file, int *curline) {
     /* Swap old configuration with new one */
     if (file->sections)
         section_free(file->sections);
-    file->sections = curfile->sections;
+    file->sections = curfile.sections;
     goto end;
     /* An error happened. */
     error:

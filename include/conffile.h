@@ -109,8 +109,14 @@ void pair_free(struct pair *pair);
 /* Add the given section to the given file */
 void conffile_add(struct conffile *file, struct section *section);
 
+/* Get the first section with the given name, or NULL */
+struct section *conffile_get(struct conffile *file, char *name);
+
 /* Add the given pair to the given section */
 void section_add(struct section *section, struct pair *pair);
+
+/* Get the first pair with the given key, or NULL */
+struct pair *section_get(struct section *section, char *key);
 
 /* Append the new section to a given list, choosing the correct position */
 void section_append(struct section *list, struct section *section);
@@ -128,6 +134,14 @@ struct section *section_prev(struct section *section);
  * corresponding structure member. */
 struct section *section_next(struct section *section);
 
+/* Return the first same-named section in the current sequence
+ * A section of NULL is handled gracefully (by returning NULL). */
+struct section *section_first(struct section *section);
+
+/* Return the last same-named section in the current sequence
+ * A section of NULL is handled gracefully (by returning NULL). */
+struct section *section_last(struct section *section);
+
 /* Return the same-keyed pair preceding this one, if any, or NULL
  * For obtaining the precedessor pair regardless of key, use the
  * corresponding structure member. */
@@ -137,6 +151,14 @@ struct pair *pair_prev(struct pair *pair);
  * For obtaining the subsequent pair regardless of key, use the corresponding
  * structure member. */
 struct pair *pair_next(struct pair *pair);
+
+/* Return the first same-named pair in the current sequence
+ * A pair of NULL is handled gracefully (by returning NULL). */
+struct pair *pair_first(struct pair *pair);
+
+/* Return the last same-named pair in the current sequence
+ * A pair of NULL is handled gracefully (by returning NULL). */
+struct pair *pair_last(struct pair *pair);
 
 /* Parse the file of the given struct conffile
  * If the same should be parsed multiple times, it has to be rewound before
