@@ -33,10 +33,15 @@ struct config *config_new(struct conffile *file, int quiet) {
         if (! quiet) perror("Error while allocating structure");
         return NULL;
     }
-    ret->socketpath = SOCKET_PATH;
+    ret->socketpath = strdup(SOCKET_PATH);
+    if (ret->socketpath == NULL) {
+        if (! quiet) perror("Failed to allocate string");
+        config_free(ret);
+        return NULL;
+    }
     ret->socket = -1;
     ret->conffile = file;
-    if (! config_update(ret, quiet)) {
+    if (config_update(ret, quiet) == -1) {
         ret->conffile = NULL;
         config_free(ret);
         return NULL;

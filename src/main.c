@@ -30,6 +30,7 @@ int main(int argc, char *argv[]) {
     /* Create config */
     fprintf(stderr, "Making config...\n");
     config = config_new(conffile, 0);
+    if (config == NULL) die("config_new");
     /* Delete config */
     fprintf(stderr, "Deleting config...\n");
     config_free(config);

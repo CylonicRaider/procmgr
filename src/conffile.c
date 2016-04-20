@@ -348,6 +348,7 @@ int conffile_parse(struct conffile *file, int *curline) {
     if (file->sections)
         section_free(file->sections);
     file->sections = curfile.sections;
+    curfile.sections = NULL;
     goto end;
     /* An error happened. */
     error:
