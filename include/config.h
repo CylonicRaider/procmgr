@@ -8,12 +8,16 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
+#include "conffile.h"
+
 /* Default location of communication socket. */
 #define SOCKET_PATH "/var/run/procmgr"
 
 /* The program should be running now. If it dies while this flag is true,
  * it is restarted. */
 #define PROG_RUNNING 1
+/* (Internal) The program is marked for removal. */
+#define PROG_REMOVE 2
 
 /* Shell to invoke actions with. */
 #define ACTION_SHELL "/bin/sh"
@@ -27,6 +31,8 @@ struct action;
  *             Defaults to SOCKET_PATH.
  * socket    : (int) The (UNIX domain) socket to use for communications.
  *             Bound to by the daemon, connected to by the clients.
+ * def_uid   : (int) The default value for allow_uid in actions.
+ * def_gid   : (int) The default value for allow_gid in actions.
  * conffile  : (struct conffile *) The configuration file underlying this
  *             configuration. May be NULL.
  * programs  : (struct program *) A linked list of the programs configured
@@ -34,6 +40,8 @@ struct action;
 struct config {
     char *socketpath;
     int socket;
+    int def_uid;
+    int def_gid;
     struct conffile *conffile;
     struct program *programs;
 };
@@ -131,7 +139,7 @@ void config_free(struct config *conf);
  * such ones that still are running persist until they are stopped; programs
  * whose configuration values have changed retain their runtime data; new
  * programs are added to the configuration, and not started.
- * Returns the amount of programs changed on success (removed ones count
+ * Returns the amount of programs affected on success (removed ones count
  * positively), or -1 on error with errno set, having written a message to
  * stderr first (if quiet is true). */
 int config_update(struct config *conf, int quiet);
@@ -144,8 +152,8 @@ void config_add(struct config *conf, struct program *prog);
 struct program *config_get(struct config *conf, char *name);
 
 /* Allocate a program using the configuration from the given configuration
- * section (which may be NULL) */
-struct program *prog_new(struct section *config);
+ * object and configuration section (none, any, or both can be NULL) */
+struct program *prog_new(struct config *conf, struct section *config);
 
 /* Free all the resources underlying the given structure
  * If any program corresponding to this section is running, nothing happens

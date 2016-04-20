@@ -43,8 +43,6 @@ void conffile_del(struct conffile *file) {
 /* Deinitialize the given structure */
 void section_del(struct section *section) {
     free(section->name);
-    if (section->prev) section->prev->next = NULL;
-    if (section->next) section->next->prev = NULL;
     section->name = NULL;
     section->prev = NULL;
     section->next = NULL;
@@ -56,8 +54,6 @@ void section_del(struct section *section) {
 void pair_del(struct pair *pair) {
     free(pair->key);
     free(pair->value);
-    if (pair->prev) pair->prev->next = NULL;
-    if (pair->next) pair->next->prev = NULL;
     pair->key = NULL;
     pair->value = NULL;
     pair->prev = NULL;

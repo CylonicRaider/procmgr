@@ -88,11 +88,11 @@ struct pair *pair_new(char *key, char *value);
 void conffile_del(struct conffile *file);
 
 /* Deinitialize the given structure
- * Linked list references to section are reset to NULL. */
+ * Linked list references to section are retained. */
 void section_del(struct section *section);
 
 /* Deinitialize the given structure
- * Linked list references to pair are reset to NULL. */
+ * Linked list references to pair are retained. */
 void pair_del(struct pair *pair);
 
 /* Deinitialize and free the given structure */
