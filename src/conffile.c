@@ -129,6 +129,11 @@ struct section *conffile_get(struct conffile *file, char *name) {
     return NULL;
 }
 
+/* Get the last section with the given name, or NULL */
+struct section *conffile_get_last(struct conffile *file, char *name) {
+    return section_last(conffile_get(file, name));
+}
+
 /* Add the given pair to the given section */
 void section_add(struct section *section, struct pair *pair) {
     if (section->data == NULL) {
@@ -147,6 +152,11 @@ struct pair *section_get(struct section *section, char *key) {
             return cur;
     }
     return NULL;
+}
+
+/* Get the last pair with the given key, or NULL */
+struct pair *section_get_last(struct section *section, char *key) {
+    return pair_last(section_get(section, key));
 }
 
 /* Append the new section to a given list, choosing the correct position */

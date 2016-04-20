@@ -112,11 +112,17 @@ void conffile_add(struct conffile *file, struct section *section);
 /* Get the first section with the given name, or NULL */
 struct section *conffile_get(struct conffile *file, char *name);
 
+/* Get the last section with the given name, or NULL */
+struct section *conffile_get_last(struct conffile *file, char *name);
+
 /* Add the given pair to the given section */
 void section_add(struct section *section, struct pair *pair);
 
 /* Get the first pair with the given key, or NULL */
 struct pair *section_get(struct section *section, char *key);
+
+/* Get the last pair with the given key, or NULL */
+struct pair *section_get_last(struct section *section, char *key);
 
 /* Append the new section to a given list, choosing the correct position */
 void section_append(struct section *list, struct section *section);
