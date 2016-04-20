@@ -31,6 +31,9 @@
 # Debug files
 *.dSYM/
 
+# Core dumps
+core
+
 # Object / build directory
 /obj/
 /bin/
