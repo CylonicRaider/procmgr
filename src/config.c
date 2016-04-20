@@ -162,7 +162,7 @@ int config_update(struct config *conf, int quiet) {
     /* Remove programs not present anymore */
     for (prog = conf->programs; prog != NULL; prog = nextprog) {
         nextprog = prog->next;
-        if (! (prog->flags & PROG_REMOVE)) continue;
+        if (! (prog->flags & PROG_REMOVE) || prog->pid) continue;
         if (prog == conf->programs) {
             conf->programs = prog->next;
             conf->programs->prev = NULL;
