@@ -1,34 +1,39 @@
 
-/* Main program for configuration file parsing testing */
+/* Main program for configuration parsing testing */
 
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
-#include "conffile.h"
+#include "config.h"
+
+void die(char *func) {
+    perror(func);
+    exit(1);
+}
 
 int main(int argc, char *argv[]) {
-    struct conffile conf = { NULL, NULL };
-    int curline, read;
+    FILE *fp;
+    struct conffile *conffile;
+    struct config *config;
     /* "Parse" command line */
     if (argc != 2) {
         fprintf(stderr, "USAGE: %s filename\n", argv[0]);
         return 1;
     }
     /* Open file */
-    conf.fp = fopen(argv[1], "r");
-    if (conf.fp == NULL) {
-        perror("fopen");
-        return 1;
-    }
-    /* Parse configuration file */
-    read = conffile_parse(&conf, &curline);
-    if (read == -1) {
-        char *errs = strerror(errno);
-        fprintf(stderr, "Error on line %d: %s\n", curline, errs);
-        return 1;
-    }
-    /* Display results */
-    conffile_write(stdout, &conf);
+    fp = fopen(argv[1], "r");
+    if (fp == NULL) die("fopen");
+    /* Create conffile */
+    fprintf(stderr, "Making conffile...\n");
+    conffile = conffile_new(fp);
+    if (conffile == NULL) die("conffile_new");
+    /* Create config */
+    fprintf(stderr, "Making config...\n");
+    config = config_new(conffile, 0);
+    /* Delete config */
+    fprintf(stderr, "Deleting config...\n");
+    config_free(config);
     /* Done */
+    fprintf(stderr, "Done.\n");
     return 0;
 }
