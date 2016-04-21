@@ -3,7 +3,44 @@
 
 /* Online configuration representation
  * In contrast to the generic conffile.h, this stores configuration and
- * run-time data in an easily accessible format. */
+ * run-time data in an easily accessible format. To load these configuration
+ * data, a subset of the file format as described in conffile.h is used; all
+ * values described are optional, although leaving some out would be unwise.
+ * The order of declarations does not matter (apart from global values, which
+ * must be specified before any section not to be taken as part of that).
+ *
+ *     socket-path = <communication socket path>
+ *     allow-uid = <default numerical UID to allow, or an explicit "none">
+ *     allow-gid = <similar to allow-uid>
+ *
+ *     [prog-<name>]
+ *     allow-uid = <default UID for all uid-* in this section>
+ *     allow-gid = <default GID>
+ *     cmd-<action> = <shell command to run for the given action>
+ *     uid-<action> = <UID to allow to perform this action>
+ *     gid-<action> = <GID to allow to perform this action>
+ *
+ * Arbitrarily many program sections can be specified; out of same-named
+ * ones, only the last is considered; similarly for all values. Spacing
+ * between sections is purely decorational, although it increases legibility.
+ * An example:
+ *
+ *     socket-path = /var/local/procmgr-local
+ *     # If GID 99 is, say, wheel, and members of that group should be
+ *     # allowed to perform actions from their own accounts.
+ *     allow-gid = 99
+ *
+ *     # Interaction with this would happen via "procmgr game-server ..."
+ *     [prog-game-server]
+ *     # If John Doe is UID 1000.
+ *     allow-uid = 1000
+ *     # Note the exec, to ensure procmgr sees the UID of the server itself
+ *     # and not of the shell.
+ *     cmd-start = exec /home/johndoe/bin/game.server
+ *     # Note the use of the $PID variable, which (following from above)
+ *     # is the UID of the server.
+ *     cmd-reload = kill -HUP $PID
+ */
 
 #ifndef _CONFIG_H
 #define _CONFIG_H
@@ -53,13 +90,15 @@ struct config {
  *              or -1 if none.
  * flags      : (int) Flags. See the PROG_* constants for descriptions.
  * delay      : (int) Restart delay in seconds. Reset to one after a
- *              successful program start, and increased exponentially (by two
- *              times) after each failed automatic restart.
+ *              successful program termination, and increased exponentially
+ *              (by two times) after each failed automatic process death.
  * prev, next : (struct program *) Linked list interconnection.
  * act_start  : (struct action *) The action to start the program. If not
  *              configured, starting fails.
  * act_restart: (struct action *) The action to restart the program. If not
- *              configured, the program is stopped and started
+ *              configured, the program is stopped and started; if
+ *              configured, the PID of the resulting process replaces the old
+ *              recorded one.
  * act_reload : (struct action *) The action to reload configuration. If not
  *              configured, the program is restarted (using act_restart).
  * act_signal : (struct action *) An arbitrary user-defined action. The
@@ -96,9 +135,9 @@ struct program {
  * ACTION             -- The name of the action being executed now.
  * PID                -- The PID of the process of the current program, or
  *                       the empty string if none.
- * The PID of the process that is running the "start" action is recorded as
- * the PID of the program as a whole; thus, the command for that action
- * should preferably exec() the actual service to be run.
+ * The PID of the process that is running the "start" and "restart" actions
+ * is recorded as the PID of the program as a whole; thus, the command for
+ * these actions should preferably exec() the actual service to be run.
  * Members:
  * command  : (char *) Shell command to be invoked when the action is
  *            requested.
