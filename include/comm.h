@@ -14,6 +14,9 @@
 #ifndef _CONTROL_H
 #define _CONTROL_H
 
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #include "config.h"
 
 /* Maximum length of a control message */

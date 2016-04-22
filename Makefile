@@ -6,21 +6,18 @@ CCFLAGS = -Wall -Iinclude/
 
 OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(wildcard $(SRCDIR)/*.c))
 
-.PHONY: objects test debug clean deepclean
+.PHONY: objects debug clean deepclean
 
 bin/progmgr: $(OBJECTS) | bin
 	$(CC) $(LDFLAGS) -o $@ obj/*.o
 
 objects: $(OBJECTS)
 
-obj/%.o: src/%.c | obj
+obj/%.o: src/%.c include/* | obj
 	$(CC) -c $(CFLAGS) $(CCFLAGS) -o $@ $<
 
 obj bin:
-	mkdir $@
-
-test: bin/progmgr
-	bin/progmgr test.cfg
+	mkdir -p $@
 
 debug: bin/progmgr
 	gdb bin/progmgr

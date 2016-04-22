@@ -4,9 +4,6 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/un.h>
 
 #include "comm.h"
 
@@ -55,7 +52,7 @@ int comm_listen(struct config *conf) {
     if (conf->socket != -1) close(conf->socket);
     conf->socket = fd;
     /* Done */
-    return 0;
+    return fd;
     /* Something failed */
     error:
         close(fd);
@@ -78,7 +75,7 @@ int comm_connect(struct config *conf) {
     if (conf->socket != -1) close(conf->socket);
     conf->socket = fd;
     /* Done */
-    return 0;
+    return fd;
     /* Something failed */
     error:
         close(fd);
@@ -195,7 +192,7 @@ int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
     hdr.msg_iov = &bufvec;
     hdr.msg_iovlen = 1;
     hdr.msg_control = credbuf;
-    hdr.msg_controllen = sizeof(credbuf);
+    hdr.msg_controllen = CMSG_SPACE(sizeof(struct ucred));
     hdr.msg_flags = 0;
     cmsg = CMSG_FIRSTHDR(&hdr);
     cmsg->cmsg_len = CMSG_LEN(sizeof(struct ucred));
@@ -211,7 +208,7 @@ int comm_senderr(int fd, char *errcode, char *errmsg,
                  struct sockaddr_un *addr) {
     /* Prepare message */
     char *fields[] = { "", errcode, errmsg };
-    struct ctlmsg msg = { 3, fields, { 0, -1, -1 } };
+    struct ctlmsg msg = { 3, fields, { -1, -1, -1 } };
     /* Deliver message */
     return comm_send(fd, &msg, addr);
 }
