@@ -7,7 +7,8 @@
  * data, a subset of the file format as described in conffile.h is used; all
  * values described are optional, although leaving some out would be unwise.
  * The order of declarations does not matter (apart from global values, which
- * must be specified before any section not to be taken as part of that).
+ * must be specified before any section not to be taken as part of that
+ * section).
  *
  *     socket-path = <communication socket path>
  *     allow-uid = <default numerical UID to allow, or an explicit "none">

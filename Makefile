@@ -26,6 +26,6 @@ debug: bin/progmgr
 	gdb bin/progmgr
 
 clean:
-	rm -rf obj
+	rm -rf obj core
 deepclean: clean
 	rm -rf bin
