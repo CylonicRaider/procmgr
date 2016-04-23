@@ -51,6 +51,9 @@
 /* Default location of communication socket. */
 #define SOCKET_PATH "/var/run/procmgr"
 
+/* Unlink the socket path before closing */
+#define CONFIG_UNLINK 1
+
 /* The program should be running now. If it dies while this flag is true,
  * it is restarted. */
 #define PROG_RUNNING 1
@@ -69,6 +72,7 @@ struct action;
  *             Defaults to SOCKET_PATH.
  * socket    : (int) The (UNIX domain) socket to use for communications.
  *             Bound to by the daemon, connected to by the clients.
+ * flags     : (int) Bitmask of CONFIG_* constants.
  * def_uid   : (int) The default value for allow_uid in actions.
  * def_gid   : (int) The default value for allow_gid in actions.
  * conffile  : (struct conffile *) The configuration file underlying this
@@ -78,6 +82,7 @@ struct action;
 struct config {
     char *socketpath;
     int socket;
+    int flags;
     int def_uid;
     int def_gid;
     struct conffile *conffile;

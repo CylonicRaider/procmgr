@@ -9,7 +9,7 @@
  * contains a short mnemonic for the error, and the third one a user-readable
  * description. */
 
-/* Requires _GNU_SOURCE .*/
+/* Requires _GNU_SOURCE. */
 
 #ifndef _CONTROL_H
 #define _CONTROL_H
@@ -43,6 +43,9 @@ void comm_del(struct ctlmsg *msg);
 void comm_free(struct ctlmsg *msg);
 
 /* Set up the communication socket for listening for connections
+ * Anything that was present at the path is removed; be cautious. This sets
+ * the CONFIG_UNLINK flag on the given structure, to try to remove the socket
+ * during cleanup.
  * Returns the file descriptor (which is also set in conf), or -1 on error
  * (setting errno, but not updating the structure member in that case). */
 int comm_listen(struct config *conf);
@@ -58,31 +61,36 @@ int comm_connect(struct config *conf);
  * individual fields are dynamically allocated copies of the original data
  * received.
  * If addr is not NULL, the address where the message originates from is
- * stored in there.
+ * stored in there; addrlen contains the buffer length on entry and the
+ * actual address length on return. If addr is not NULL but addrlen is NULL,
+ * the function fails with a EFAULT.
  * Returns the amount of bytes received, zero if an invalid message was
  * received (having replied with an error messgae; it is the caller's
  * obligation to restart the call if desired), or -1 on error, with errno
  * set.
  * NOTE that a maximum length of MSG_MAXLEN is enforced; messages longer than
  *      that are rejected and an error message is sent. */
-int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr);
+int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
+              socklen_t *addrlen);
 
 /* Send a message through the communication socket
  * The creds member of msg is filled in, regardless of whether the call fails
  * or not.
- * addr (if not NULL) specifies the peer to send the message to.
+ * addr (if not NULL) specifies the peer to send the message to; see
+ * comm_recv() for the semantics of addrlen.
  * Returns the amount of bytes sent, or -1 on error, with errno set.
  * NOTE that the maximum message length (of MSG_MAXLEN) is enforced as well;
  *      attempts to send longer messages are rejected with an E2BIG. Empty
  *      messages are rejected with a EINVAL. */
-int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr);
+int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
+              socklen_t addrlen);
 
 /* Send an error message
  * The code and description are packed into an error message as described
  * above and sent over the given file descriptor.
- * See comm_send() for the semantics of addr.
+ * See comm_send() for the semantics of addr and addrlen.
  * Returns the amount of bytes send, or -1 on error, with errno set. */
 int comm_senderr(int fd, char *errcode, char *errdesc,
-                 struct sockaddr_un *addr);
+                 struct sockaddr_un *addr, socklen_t addrlen);
 
 #endif

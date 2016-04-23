@@ -8,7 +8,7 @@ OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(wildcard $(SRCDIR)/*.c))
 
 .PHONY: objects debug clean deepclean
 
-bin/progmgr: $(OBJECTS) | bin
+bin/procmgr: $(OBJECTS) | bin
 	$(CC) $(LDFLAGS) -o $@ obj/*.o
 
 objects: $(OBJECTS)
@@ -19,8 +19,8 @@ obj/%.o: src/%.c include/* | obj
 obj bin:
 	mkdir -p $@
 
-debug: bin/progmgr
-	gdb bin/progmgr
+debug: bin/procmgr
+	gdb bin/procmgr
 
 clean:
 	rm -rf obj core

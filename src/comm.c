@@ -36,6 +36,8 @@ void comm_free(struct ctlmsg *msg) {
 int comm_listen(struct config *conf) {
     struct sockaddr_un addr;
     int one = 1;
+    /* Remove old path; ignore errors */
+    unlink(conf->socketpath);
     /* Set up address */
     if (setup_addr(&addr, conf) == -1) return -1;
     /* Create socket */
@@ -51,6 +53,7 @@ int comm_listen(struct config *conf) {
     /* Replace old socket, if any */
     if (conf->socket != -1) close(conf->socket);
     conf->socket = fd;
+    conf->flags |= CONFIG_UNLINK;
     /* Done */
     return fd;
     /* Something failed */
@@ -62,6 +65,7 @@ int comm_listen(struct config *conf) {
 /* Set up the communication socket for connecting to a "master" instance */
 int comm_connect(struct config *conf) {
     struct sockaddr_un addr;
+    int one = 1;
     /* Set up address */
     if (setup_addr(&addr, conf) == -1) return -1;
     /* Create socket */
@@ -70,6 +74,9 @@ int comm_connect(struct config *conf) {
         return -1;
     /* Connect */
     if (connect(fd, (struct sockaddr *) &addr, sizeof(addr)) == -1)
+        goto error;
+    /* Allow credential receiving */
+    if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &one, sizeof(one)) == -1)
         goto error;
     /* Replace old socket */
     if (conf->socket != -1) close(conf->socket);
@@ -83,7 +90,8 @@ int comm_connect(struct config *conf) {
 }
 
 /* Receive a message from the communication socket */
-int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
+int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
+              socklen_t *addrlen) {
     char buf[MSG_MAXLEN], credbuf[CREDBUF_SIZE];
     int ret, i, j;
     struct sockaddr_un raddr;
@@ -92,6 +100,11 @@ int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
     struct cmsghdr *cmsg;
     /* Deallocate old data */
     comm_del(msg);
+    /* Verify arguments */
+    if (addr && ! addrlen) {
+        errno = EFAULT;
+        return -1;
+    }
     /* Prepare buffers for receiving */
     bufvec.iov_base = buf;
     bufvec.iov_len = sizeof(buf);
@@ -107,7 +120,8 @@ int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
     if (ret == -1) return -1;
     /* Check for invalid messages */
     if (ret != 0 && buf[ret - 1]) {
-        if (comm_senderr(fd, "BADMSG", "Bad message", &raddr) == -1) {
+        if (comm_senderr(fd, "BADMSG", "Bad message", &raddr,
+                         hdr.msg_namelen) == -1) {
             return -1;
         } else {
             return 0;
@@ -150,6 +164,11 @@ int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
         msg->creds.gid = creds->gid;
         break;
     }
+    /* Zero-pad raddr; fill in addr */
+    if (addr) {
+        *addr = raddr;
+        *addrlen = hdr.msg_namelen;
+    }
     /* Done */
     return ret;
     /* Error while allocating payload */
@@ -159,7 +178,8 @@ int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
 }
 
 /* Send a message through the communication socket */
-int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
+int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
+              socklen_t addrlen) {
     char buf[MSG_MAXLEN], credbuf[CREDBUF_SIZE];
     int buflen = 0, i;
     struct iovec bufvec;
@@ -188,7 +208,7 @@ int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
     bufvec.iov_base = buf;
     bufvec.iov_len = buflen;
     hdr.msg_name = addr;
-    hdr.msg_namelen = (addr == NULL) ? 0 : sizeof(*addr);
+    hdr.msg_namelen = addrlen;
     hdr.msg_iov = &bufvec;
     hdr.msg_iovlen = 1;
     hdr.msg_control = credbuf;
@@ -205,12 +225,12 @@ int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr) {
 
 /* Send an error message */
 int comm_senderr(int fd, char *errcode, char *errmsg,
-                 struct sockaddr_un *addr) {
+                 struct sockaddr_un *addr, socklen_t addrlen) {
     /* Prepare message */
     char *fields[] = { "", errcode, errmsg };
     struct ctlmsg msg = { 3, fields, { -1, -1, -1 } };
     /* Deliver message */
-    return comm_send(fd, &msg, addr);
+    return comm_send(fd, &msg, addr, addrlen);
 }
 
 /* Common address preparation */

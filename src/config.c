@@ -51,8 +51,16 @@ struct config *config_new(struct conffile *file, int quiet) {
 
 /* Deallocate all the underlying structures */
 void config_del(struct config *conf) {
-    if (conf->socket != -1) close(conf->socket);
+    if (conf->socket != -1) {
+        close(conf->socket);
+        if ((conf->flags & CONFIG_UNLINK) && conf->socketpath) {
+            int en = errno;
+            unlink(conf->socketpath);
+            errno = en;
+        }
+    }
     conf->socket = -1;
+    conf->flags = 0;
     if (conf->conffile) conffile_free(conf->conffile);
     conf->conffile = NULL;
     if (conf->programs) prog_free(conf->programs);

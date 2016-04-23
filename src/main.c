@@ -14,6 +14,27 @@ void die(char *func) {
     exit(1);
 }
 
+void print_msg(FILE *fp, struct ctlmsg *msg) {
+    int i;
+    char *p;
+    fputs("[msg [", fp);
+    for (i = 0; i < msg->fieldnum; i++) {
+        if (i) fputs(", ", fp);
+        fputc('"', fp);
+        for (p = msg->fields[i]; *p; p++) {
+            if (*p == '\n') {
+                fputs("\\n", fp);
+                continue;
+            }
+            if (*p == '"' || *p == '\\') fputc('\\', fp);
+            fputc(*p, fp);
+        }
+        fputc('"', fp);
+    }
+    fprintf(fp, "] {pid=%d uid=%d gid=%d}]\n", msg->creds.pid,
+            msg->creds.uid, msg->creds.gid);
+}
+
 int main(int argc, char *argv[]) {
     FILE *fp;
     int fd, listen;
@@ -21,6 +42,7 @@ int main(int argc, char *argv[]) {
     struct config *config;
     struct ctlmsg msg = { 0, NULL, { -1, -1, -1 } };
     struct sockaddr_un addr;
+    socklen_t addrlen;
     /* "Parse" command line */
     if (argc < 2 || argc > 3 || (argc == 3 &&
             strcmp(argv[2], "-l") != 0)) {
@@ -48,12 +70,14 @@ int main(int argc, char *argv[]) {
     /* Main loop */
     if (listen) {
         for (;;) {
-            if (comm_recv(fd, &msg, &addr) == -1)
+            if (comm_recv(fd, &msg, &addr, &addrlen) == -1)
                 die("comm_recv");
-            if (comm_send(fd, &msg, &addr) == -1)
+            print_msg(stdout, &msg);
+            if (comm_send(fd, &msg, &addr, addrlen) == -1)
                 die("comm_send");
         }
     } else {
+        struct ctlmsg msg2;
         char *buffer = NULL, **parts = NULL, *p;
         size_t buflen = 0;
         int nparts, i;
@@ -84,8 +108,12 @@ int main(int argc, char *argv[]) {
             msg.fieldnum = nparts;
             msg.fields = parts;
             /* Send message */
-            if (comm_send(fd, &msg, NULL) == -1)
+            if (comm_send(fd, &msg, NULL, 0) == -1)
                 die("comm_send");
+            /* Receive reply */
+            if (comm_recv(fd, &msg2, NULL, 0) == -1)
+                die("comm_recv");
+            print_msg(stdout, &msg2);
         }
         free(buffer);
     }
