@@ -88,11 +88,11 @@ struct pair *pair_new(char *key, char *value);
 void conffile_del(struct conffile *file);
 
 /* Deinitialize the given structure
- * Linked list references to section are retained. */
+ * Linked list references are updated to point at each other. */
 void section_del(struct section *section);
 
 /* Deinitialize the given structure
- * Linked list references to pair are retained. */
+ * Linked list references are updated to point at each other. */
 void pair_del(struct pair *pair);
 
 /* Deinitialize and free the given structure */
@@ -115,6 +115,9 @@ struct section *conffile_get(struct conffile *file, char *name);
 /* Get the last section with the given name, or NULL */
 struct section *conffile_get_last(struct conffile *file, char *name);
 
+/* Remove the given section from the given configuration and deallocate it */
+void conffile_remove(struct conffile *file, struct section *sec);
+
 /* Add the given pair to the given section */
 void section_add(struct section *section, struct pair *pair);
 
@@ -123,6 +126,9 @@ struct pair *section_get(struct section *section, char *key);
 
 /* Get the last pair with the given key, or NULL */
 struct pair *section_get_last(struct section *section, char *key);
+
+/* Remove the given pair from the given section and free it */
+void section_remove(struct section *section, struct pair *pair);
 
 /* Append the new section to a given list, choosing the correct position */
 void section_append(struct section *list, struct section *section);

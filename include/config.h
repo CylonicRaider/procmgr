@@ -196,11 +196,16 @@ void config_add(struct config *conf, struct program *prog);
 /* Return the program named by the given string, or NULL if none */
 struct program *config_get(struct config *conf, char *name);
 
+/* Remove the given program from the configuration, deallocating it */
+void config_remove(struct config *conf, struct program *prog);
+
 /* Allocate a program using the configuration from the given configuration
  * object and configuration section (none, any, or both can be NULL) */
 struct program *prog_new(struct config *conf, struct section *config);
 
 /* Free all the resources underlying the given structure
+ * If this is part of a linked list, the references are updated accordingly;
+ * note however that the beginning of the list must be updated as well.
  * If any program corresponding to this section is running, nothing happens
  * to it. */
 void prog_del(struct program *prog);

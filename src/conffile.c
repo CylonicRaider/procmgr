@@ -44,6 +44,8 @@ void conffile_del(struct conffile *file) {
 void section_del(struct section *section) {
     free(section->name);
     section->name = NULL;
+    if (section->prev) section->prev->next = section->next;
+    if (section->next) section->next->prev = section->prev;
     section->prev = NULL;
     section->next = NULL;
     if (section->data) pair_free(section->data);
@@ -56,6 +58,8 @@ void pair_del(struct pair *pair) {
     free(pair->value);
     pair->key = NULL;
     pair->value = NULL;
+    if (pair->prev) pair->prev->next = pair->next;
+    if (pair->next) pair->next->prev = pair->prev;
     pair->prev = NULL;
     pair->next = NULL;
 }
@@ -130,6 +134,13 @@ struct section *conffile_get_last(struct conffile *file, char *name) {
     return section_last(conffile_get(file, name));
 }
 
+/* Remove the given section from the given configuration and deallocate it */
+void conffile_remove(struct conffile *file, struct section *sec) {
+    if (file->sections == sec) file->sections = sec->next;
+    section_del(sec);
+    free(sec);
+}
+
 /* Add the given pair to the given section */
 void section_add(struct section *section, struct pair *pair) {
     if (section->data == NULL) {
@@ -153,6 +164,13 @@ struct pair *section_get(struct section *section, char *key) {
 /* Get the last pair with the given key, or NULL */
 struct pair *section_get_last(struct section *section, char *key) {
     return pair_last(section_get(section, key));
+}
+
+/* Remove the given pair from the given section and free it */
+void section_remove(struct section *section, struct pair *pair) {
+    if (section->data == pair) section->data = pair->next;
+    pair_del(pair);
+    free(pair);
 }
 
 /* Append the new section to a given list, choosing the correct position */

@@ -217,6 +217,8 @@ void config_add(struct config *conf, struct program *prog) {
         prog->prev = old->prev;
         prog->next = old->next;
     }
+    old->prev = NULL;
+    old->next = NULL;
     /* Migrate PID and flags */
     prog->flags = old->flags & ~PROG_REMOVE;
     prog->pid = old->pid;
@@ -232,6 +234,13 @@ struct program *config_get(struct config *conf, char *name) {
         if (strcmp(cur->name, name) == 0) break;
     }
     return cur;
+}
+
+/* Remove the given program from the configuration, deallocating it */
+void config_remove(struct config *conf, struct program *prog) {
+    if (conf->programs == prog) conf->programs = prog->next;
+    prog_del(prog);
+    free(prog);
 }
 
 /* Allocate a program using the configuration from the given configuration
@@ -298,6 +307,8 @@ void prog_del(struct program *prog) {
     prog->pid = -1;
     prog->flags = 0;
     prog->delay = 0;
+    if (prog->prev) prog->prev->next = prog->next;
+    if (prog->next) prog->next->prev = prog->prev;
     prog->prev = NULL;
     prog->next = NULL;
     action_free(&prog->act_start);
