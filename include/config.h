@@ -47,6 +47,7 @@
 #define _CONFIG_H
 
 #include "conffile.h"
+#include "jobs.h"
 
 /* Default location of communication socket. */
 #define SOCKET_PATH "/var/run/procmgr"
@@ -77,6 +78,7 @@ struct action;
  * def_gid   : (int) The default value for allow_gid in actions.
  * conffile  : (struct conffile *) The configuration file underlying this
  *             configuration. May be NULL.
+ * jobs      : (struct jobqueue *) The queue of pending jobs.
  * programs  : (struct program *) A linked list of the programs configured
  *             and/or used. */
 struct config {
@@ -86,6 +88,7 @@ struct config {
     int def_uid;
     int def_gid;
     struct conffile *conffile;
+    struct jobqueue *jobs;
     struct program *programs;
 };
 

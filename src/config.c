@@ -37,17 +37,23 @@ struct config *config_new(struct conffile *file, int quiet) {
     ret->socketpath = strdup(SOCKET_PATH);
     if (! ret->socketpath) {
         if (! quiet) perror("Failed to allocate string");
-        config_free(ret);
-        return NULL;
+        goto error;
+    }
+    ret->jobs = jobqueue_new();
+    if (! ret->jobs) {
+        if (! quiet) perror("Failed to allocate memory");
+        goto error;
     }
     ret->socket = -1;
     ret->conffile = file;
     if (config_update(ret, quiet) == -1) {
         ret->conffile = NULL;
-        config_free(ret);
-        return NULL;
+        goto error;
     }
     return ret;
+    error:
+        config_free(ret);
+        return NULL;
 }
 
 /* Deallocate all the underlying structures */
@@ -64,6 +70,8 @@ void config_del(struct config *conf) {
     conf->flags = 0;
     if (conf->conffile) conffile_free(conf->conffile);
     conf->conffile = NULL;
+    if (conf->jobs) jobqueue_free(conf->jobs);
+    conf->jobs = NULL;
     if (conf->programs) prog_free(conf->programs);
     conf->programs = NULL;
 }
