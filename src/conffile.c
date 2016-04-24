@@ -4,13 +4,14 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+
 #include "readline.h"
 #include "conffile.h"
 
 /* Allocate and initialize a struct conffile with the given parameters */
 struct conffile *conffile_new(FILE *fp) {
     struct conffile *ret = calloc(1, sizeof(struct conffile));
-    if (ret == NULL) return NULL;
+    if (! ret) return NULL;
     ret->fp = fp;
     return ret;
 }
@@ -18,7 +19,7 @@ struct conffile *conffile_new(FILE *fp) {
 /* Allocate and initialize a struct section with the given parameters */
 struct section *section_new(char *name) {
     struct section *ret = calloc(1, sizeof(struct section));
-    if (ret == NULL) return NULL;
+    if (! ret) return NULL;
     ret->name = name;
     return ret;
 }
@@ -26,7 +27,7 @@ struct section *section_new(char *name) {
 /* Allocate and initialize a struct pair with the given parameters */
 struct pair *pair_new(char *key, char *value) {
     struct pair *ret = calloc(1, sizeof(struct pair));
-    if (ret == NULL) return NULL;
+    if (! ret) return NULL;
     ret->key = key;
     ret->value = value;
     return ret;
@@ -72,16 +73,14 @@ void conffile_free(struct conffile *file) {
 
 /* Deinitialize and free the given structure */
 void section_free(struct section *section) {
-    struct section *prev = section->prev, *next = section->next, *cur;
-    while (prev) {
-        cur = prev;
-        prev = prev->prev;
+    struct section *prev, *next, *cur;
+    for (cur = section->prev; cur; cur = prev) {
+        prev = cur->prev;
         section_del(cur);
         free(cur);
     }
-    while (next) {
-        cur = next;
-        next = next->next;
+    for (cur = section->next; cur; cur = next) {
+        next = cur->next;
         section_del(cur);
         free(cur);
     }
@@ -91,16 +90,14 @@ void section_free(struct section *section) {
 
 /* Deinitialize and free the given structure */
 void pair_free(struct pair *pair) {
-    struct pair *prev = pair->prev, *next = pair->next, *cur;
-    while (prev) {
-        cur = prev;
-        prev = prev->prev;
+    struct pair *prev, *next, *cur;
+    for (cur = pair->prev; cur; cur = prev) {
+        prev = cur->prev;
         pair_del(cur);
         free(cur);
     }
-    while (next) {
-        cur = next;
-        next = next->next;
+    for (cur = pair->next; cur; cur = next) {
+        next = cur->next;
         pair_del(cur);
         free(cur);
     }
@@ -110,7 +107,7 @@ void pair_free(struct pair *pair) {
 
 /* Add the given section to the given file */
 void conffile_add(struct conffile *file, struct section *section) {
-    if (file->sections == NULL) {
+    if (! file->sections) {
         file->sections = section;
         section->prev = section->next = NULL;
     } else {
@@ -121,8 +118,8 @@ void conffile_add(struct conffile *file, struct section *section) {
 /* Get the first section with the given name, or NULL */
 struct section *conffile_get(struct conffile *file, char *name) {
     struct section *cur;
-    for (cur = file->sections; cur != NULL; cur = cur->next) {
-        if ((cur->name == NULL && name == NULL) ||
+    for (cur = file->sections; cur; cur = cur->next) {
+        if ((! cur->name && ! name) ||
                 (cur->name && name && strcmp(cur->name, name) == 0))
             return cur;
     }
@@ -143,7 +140,7 @@ void conffile_remove(struct conffile *file, struct section *sec) {
 
 /* Add the given pair to the given section */
 void section_add(struct section *section, struct pair *pair) {
-    if (section->data == NULL) {
+    if (! section->data) {
         section->data = pair;
         pair->prev = pair->next = NULL;
     } else {
@@ -154,7 +151,7 @@ void section_add(struct section *section, struct pair *pair) {
 /* Get the first pair with the given key, or NULL */
 struct pair *section_get(struct section *section, char *key) {
     struct pair *cur;
-    for (cur = section->data; cur != NULL; cur = cur->next) {
+    for (cur = section->data; cur; cur = cur->next) {
         if (strcmp(cur->key, key) == 0)
             return cur;
     }
@@ -177,9 +174,9 @@ void section_remove(struct section *section, struct pair *pair) {
 void section_append(struct section *list, struct section *section) {
     struct section *cur, *last = NULL, *found = NULL;
     /* Scan for section with same name */
-    for (cur = list; cur != NULL; last = cur, cur = cur->next) {
+    for (cur = list; cur; last = cur, cur = cur->next) {
         /* Take that! */
-        if ((section->name == NULL && cur->name == NULL) ||
+        if ((! section->name && ! cur->name) ||
                 (section->name && cur->name &&
                  strcmp(section->name, cur->name) == 0))
             found = cur;
@@ -196,7 +193,7 @@ void section_append(struct section *list, struct section *section) {
 void pair_append(struct pair *list, struct pair *pair) {
     struct pair *cur, *last = NULL, *found = NULL;
     /* Scan for section with same name */
-    for (cur = list; cur != NULL; last = cur, cur = cur->next) {
+    for (cur = list; cur; last = cur, cur = cur->next) {
         /* Take that! */
         if (strcmp(pair->key, cur->key) == 0)
             found = cur;
@@ -212,12 +209,12 @@ void pair_append(struct pair *list, struct pair *pair) {
 /* Return the same-named section preceding this one, if any, or NULL */
 struct section *section_prev(struct section *section) {
     struct section *prev = section->prev;
-    if (prev == NULL) {
+    if (! prev) {
         return NULL;
-    } else if (section->name == NULL) {
-        return (prev->name == NULL) ? prev : NULL;
+    } else if (! section->name) {
+        return (! prev->name) ? prev : NULL;
     } else {
-        return (prev->name != NULL && strcmp(section->name,
+        return (prev->name && strcmp(section->name,
             prev->name) == 0) ? prev : NULL;
     }
 }
@@ -225,12 +222,12 @@ struct section *section_prev(struct section *section) {
 /* Return the same-named section following this one, if any, or NULL */
 struct section *section_next(struct section *section) {
     struct section *next = section->next;
-    if (next == NULL) {
+    if (! next) {
         return NULL;
-    } else if (section->name == NULL) {
-        return (next->name == NULL) ? next : NULL;
+    } else if (! section->name) {
+        return (! next->name) ? next : NULL;
     } else {
-        return (next->name != NULL && strcmp(section->name,
+        return (next->name && strcmp(section->name,
             next->name) == 0) ? next : NULL;
     }
 }
@@ -238,56 +235,56 @@ struct section *section_next(struct section *section) {
 /* Return the first same-named section in the current sequence */
 struct section *section_first(struct section *section) {
     struct section *prev = section;
-    if (section == NULL) return NULL;
+    if (! section) return NULL;
     do {
         section = prev;
         prev = section_prev(section);
-    } while (prev != NULL);
+    } while (prev);
     return section;
 }
 
 /* Return the last same-named section in the current sequence */
 struct section *section_last(struct section *section) {
     struct section *next = section;
-    if (section == NULL) return NULL;
+    if (! section) return NULL;
     do {
         section = next;
         next = section_next(section);
-    } while (next != NULL);
+    } while (next);
     return section;
 }
 
 /* Return the same-keyed pair preceding this one, if any, or NULL */
 struct pair *pair_prev(struct pair *pair) {
     struct pair *prev = pair->prev;
-    return (prev != NULL && strcmp(pair->key, prev->key) == 0) ? prev : NULL;
+    return (prev && strcmp(pair->key, prev->key) == 0) ? prev : NULL;
 }
 
 /* Return the same-named pair following this one, if any, or NULL */
 struct pair *pair_next(struct pair *pair) {
     struct pair *next = pair->next;
-    return (next != NULL && strcmp(pair->key, next->key) == 0) ? next : NULL;
+    return (next && strcmp(pair->key, next->key) == 0) ? next : NULL;
 }
 
 /* Return the first same-named pair in the current sequence */
 struct pair *pair_first(struct pair *pair) {
     struct pair *prev = pair;
-    if (pair == NULL) return NULL;
+    if (! pair) return NULL;
     do {
         pair = prev;
         prev = pair_prev(pair);
-    } while (prev != NULL);
+    } while (prev);
     return pair;
 }
 
 /* Return the last same-named pair in the current sequence */
 struct pair *pair_last(struct pair *pair) {
     struct pair *next = pair;
-    if (pair == NULL) return NULL;
+    if (! pair) return NULL;
     do {
         pair = next;
         next = pair_next(pair);
-    } while (next != NULL);
+    } while (next);
     return pair;
 }
 
@@ -325,7 +322,7 @@ int conffile_parse(struct conffile *file, int *curline) {
         if (line[0] == '[' && line[linelen - 1] == ']') {
             /* Drain section into file structure */
             section = malloc(sizeof(cursec));
-            if (section == NULL) goto error;
+            if (! section) goto error;
             *section = cursec;
             conffile_add(&curfile, section);
             /* Start new section */
@@ -337,19 +334,19 @@ int conffile_parse(struct conffile *file, int *curline) {
         }
         /* Parse a key-value pair */
         eq = strchr(line, '=');
-        if (eq == NULL) {
+        if (! eq) {
             errno = EINVAL;
             goto error;
         }
         *eq++ = '\0';
         /* Extract key and value */
         curpair.key = strdup(strip_whitespace(line));
-        if (curpair.key == NULL) goto error;
+        if (! curpair.key) goto error;
         curpair.value = strdup(strip_whitespace(eq));
-        if (curpair.value == NULL) goto error;
+        if (! curpair.value) goto error;
         /* Add to current section */
         pair = malloc(sizeof(curpair));
-        if (pair == NULL) goto error;
+        if (! pair) goto error;
         *pair = curpair;
         section_add(&cursec, pair);
         curpair.key = NULL;
@@ -357,7 +354,7 @@ int conffile_parse(struct conffile *file, int *curline) {
     }
     /* Add last section to file as well */
     section = malloc(sizeof(cursec));
-    if (section == NULL) goto error;
+    if (! section) goto error;
     *section = cursec;
     conffile_add(file, section);
     cursec.data = NULL;
@@ -384,7 +381,7 @@ int conffile_parse(struct conffile *file, int *curline) {
 int conffile_write(FILE *file, struct conffile *cfile) {
     int written = 0, w;
     struct section *cur;
-    for (cur = cfile->sections; cur != NULL; cur = cur->next) {
+    for (cur = cfile->sections; cur; cur = cur->next) {
         w = section_write(file, cur);
         if (w < 0) return -1;
         written += w;
@@ -401,7 +398,7 @@ int section_write(FILE *file, struct section *section) {
         if (w < 0) return -1;
         written += w;
     }
-    for (cur = section->data; cur != NULL; cur = cur->next) {
+    for (cur = section->data; cur; cur = cur->next) {
         w = pair_write(file, cur);
         if (w < 0) return -1;
         written += w;

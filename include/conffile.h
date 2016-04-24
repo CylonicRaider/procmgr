@@ -19,8 +19,7 @@
  * contain equals signs). Keys and values can be empty. Leading and trailing
  * whitespace is ignored in both names and values. Multiple assignments with
  * the same key are as possible as multiple sections with the same name.
- * Yes, this *is* yet another derivate of the INI file format.
- */
+ * Yes, this *is* yet another derivate of the INI file format. */
 
 #ifndef _CONFFILE_H
 #define _CONFFILE_H

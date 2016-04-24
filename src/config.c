@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
 #include "config.h"
 
 /* Static functions/constants */
@@ -29,12 +30,12 @@ static struct actionname {
 /* Create a new runtime configuration based on the given configuration file */
 struct config *config_new(struct conffile *file, int quiet) {
     struct config *ret = calloc(1, sizeof(struct config));
-    if (ret == NULL) {
+    if (! ret) {
         if (! quiet) perror("Error while allocating structure");
         return NULL;
     }
     ret->socketpath = strdup(SOCKET_PATH);
-    if (ret->socketpath == NULL) {
+    if (! ret->socketpath) {
         if (! quiet) perror("Failed to allocate string");
         config_free(ret);
         return NULL;
@@ -145,15 +146,15 @@ int config_update(struct config *conf, int quiet) {
         }
     }
     /* Mark all programs for removal (merged ones will have flag clear) */
-    for (prog = conf->programs; prog != NULL; prog = prog->next) {
+    for (prog = conf->programs; prog; prog = prog->next) {
         prog->flags |= PROG_REMOVE;
     }
     /* Reload programs */
-    for (sec = conf->conffile->sections; sec != NULL; sec = sec->next) {
+    for (sec = conf->conffile->sections; sec; sec = sec->next) {
         /* Scroll to last section of "grop" */
         sec = section_last(sec);
         /* Ignore not appropriately named sections */
-        if (sec->name == NULL || strncmp(sec->name, "prog-", 5) != 0)
+        if (! sec->name || strncmp(sec->name, "prog-", 5) != 0)
             continue;
         /* Create program */
         prog = prog_new(conf, sec);
@@ -168,7 +169,7 @@ int config_update(struct config *conf, int quiet) {
         ret++;
     }
     /* Remove programs not present anymore */
-    for (prog = conf->programs; prog != NULL; prog = nextprog) {
+    for (prog = conf->programs; prog; prog = nextprog) {
         nextprog = prog->next;
         if (! (prog->flags & PROG_REMOVE) || prog->pid) continue;
         if (prog == conf->programs) {
@@ -190,12 +191,12 @@ int config_update(struct config *conf, int quiet) {
 void config_add(struct config *conf, struct program *prog) {
     struct program *old, *prev = NULL;
     /* Find old location */
-    for (old = conf->programs; old != NULL; prev = old, old = old->next) {
+    for (old = conf->programs; old; prev = old, old = old->next) {
         if (strcmp(old->name, prog->name) == 0) break;
     }
     /* Add new entry */
     if (! old) {
-        if (prev == NULL) {
+        if (! prev) {
             conf->programs = prog;
             prog->prev = NULL;
             prog->next = NULL;
@@ -230,7 +231,7 @@ void config_add(struct config *conf, struct program *prog) {
 /* Return the program named by the given string, or NULL if none */
 struct program *config_get(struct config *conf, char *name) {
     struct program *cur;
-    for (cur = conf->programs; cur != NULL; cur = cur->next) {
+    for (cur = conf->programs; cur; cur = cur->next) {
         if (strcmp(cur->name, name) == 0) break;
     }
     return cur;
@@ -251,7 +252,7 @@ struct program *prog_new(struct config *conf, struct section *config) {
     struct action *act = NULL;
     int i, def_uid, def_gid;
     /* Set name */
-    if (config->name == NULL) {
+    if (! config->name) {
         ret->name = strdup("");
     } else if (strncmp(config->name, "prog-", 5) == 0) {
         ret->name = strdup(config->name + 5);
@@ -260,8 +261,8 @@ struct program *prog_new(struct config *conf, struct section *config) {
     }
     if (! ret->name) goto error;
     /* Obtain default UID and GID */
-    def_uid = (conf == NULL) ? -1 : conf->def_uid;
-    def_gid = (conf == NULL) ? -1 : conf->def_gid;
+    def_uid = (! conf) ? -1 : conf->def_uid;
+    def_gid = (! conf) ? -1 : conf->def_gid;
     /* Read configuration */
     if (config) {
         /* Update default UID and GID */
@@ -277,7 +278,7 @@ struct program *prog_new(struct config *conf, struct section *config) {
             act = calloc(1, sizeof(struct action));
             if (! act) goto error;
             act->command = strdup(pair->value);
-            if (act->command == NULL) goto error;
+            if (! act->command) goto error;
             /* Set up UID and GID */
             act->allow_uid = def_uid;
             act->allow_gid = def_gid;
@@ -321,16 +322,14 @@ void prog_del(struct program *prog) {
 
 /* Deallocate the given structure, as well as any others linked to it */
 void prog_free(struct program *prog) {
-    struct program *prev = prog->prev, *next = prog->next, *cur;
-    while (prev) {
-        cur = prev;
-        prev = prev->prev;
+    struct program *prev, *next, *cur;
+    for (cur = prog->prev; cur; cur = prev) {
+        prev = cur->prev;
         prog_del(cur);
         free(cur);
     }
-    while (next) {
-        cur = next;
-        next = next->next;
+    for (cur = prog->next; cur; cur = next) {
+        next = cur->next;
         prog_del(cur);
         free(cur);
     }

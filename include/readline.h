@@ -18,8 +18,7 @@
  * If reading reaches EOF, there is no LF at the end of the line.
  * The return value is the length of the line (which may include NUL-s),
  * including the terminator, if any (and excluding the NUL byte added after
- * it). On error, -1 is returned, and errno is set appropriately.
- */
+ * it). On error, -1 is returned, and errno is set appropriately. */
 ssize_t readline(FILE *f, char **buffer, size_t *size);
 
 /* Remove leading and trailing whitespace from a string
@@ -28,8 +27,7 @@ ssize_t readline(FILE *f, char **buffer, size_t *size);
  * identical but new NUL byte if there is no trailing whitespace); leading
  * whitespace is handled by returning a pointer to the first non-whitespace
  * character.
- * Returns a pointer to the beginning of the trimmed string.
- */
+ * Returns a pointer to the beginning of the trimmed string. */
 char *strip_whitespace(char *string);
 
 #endif

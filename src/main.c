@@ -44,21 +44,20 @@ int main(int argc, char *argv[]) {
     struct ctlmsg msg = CTLMSG_INIT;
     struct addr addr;
     /* "Parse" command line */
-    if (argc < 2 || argc > 3 || (argc == 3 &&
-            strcmp(argv[2], "-l") != 0)) {
+    if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[2], "-l") != 0)) {
         fprintf(stderr, "USAGE: %s filename [-l]\n", argv[0]);
         return 1;
     }
     listen = (argc == 3);
     /* Open file */
     fp = fopen(argv[1], "r");
-    if (fp == NULL) die("fopen");
+    if (! fp) die("fopen");
     /* Create conffile */
     conffile = conffile_new(fp);
-    if (conffile == NULL) die("conffile_new");
+    if (! conffile) die("conffile_new");
     /* Create config */
     config = config_new(conffile, 0);
-    if (config == NULL) die("config_new");
+    if (! config) die("config_new");
     /* Create socket */
     if (listen) {
         fd = comm_listen(config);
