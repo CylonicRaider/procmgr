@@ -17,14 +17,14 @@ ssize_t readline(FILE *f, char **buffer, size_t *size) {
     clearerr(f);
     for (;;) {
         /* (Re)allocate buffer if necessary */
-        if (*! buffer) {
+        if (! *buffer) {
             *size = DEFAULT_BUFSIZE;
             *buffer = malloc(*size);
-            if (*! buffer) return -1;
+            if (! *buffer) return -1;
         } else if (*size <= buflen) {
             *size *= 2;
             *buffer = realloc(*buffer, *size);
-            if (*! buffer) return -1;
+            if (! *buffer) return -1;
         }
         /* Abort if necessary and space for the NUL is there */
         if (done) break;
