@@ -110,7 +110,7 @@ int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr) {
     bufvec.iov_base = buf;
     bufvec.iov_len = sizeof(buf);
     hdr.msg_name = &raddr.addr;
-    hdr.msg_namelen = sizeof(raddr);
+    hdr.msg_namelen = sizeof(raddr.addr);
     hdr.msg_iov = &bufvec;
     hdr.msg_iovlen = 1;
     hdr.msg_control = credbuf;
