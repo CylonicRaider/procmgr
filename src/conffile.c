@@ -184,7 +184,7 @@ void section_append(struct section *list, struct section *section) {
                  strcmp(section->name, cur->name) == 0))
             found = cur;
     }
-    /* Yes, this *will* segfault (if used improperly). */
+    /* Yes, this *will* segfault (if used improperly) */
     if (! found) found = last;
     section->next = found->next;
     found->next = section;
@@ -201,7 +201,7 @@ void pair_append(struct pair *list, struct pair *pair) {
         if (strcmp(pair->key, cur->key) == 0)
             found = cur;
     }
-    /* Yes, all of this *is* copied from above (with minor modifications). */
+    /* Yes, all of this *is* copied from above (with minor modifications) */
     if (! found) found = last;
     pair->next = found->next;
     found->next = pair;
@@ -301,53 +301,53 @@ int conffile_parse(struct conffile *file, int *curline) {
     struct pair curpair = { NULL, NULL, NULL, NULL }, *pair;
     /* Initialize curline */
     if (curline) *curline = 0;
-    /* Read the file linewise. */
+    /* Read the file linewise */
     for (;;) {
         if (curline) (*curline)++;
-        /* Actually read line. */
+        /* Actually read line */
         linelen = readline(file->fp, &buffer, &buflen);
         if (linelen == 0) break;
         if (linelen == -1) goto error;
-        /* Check for embedded NUL-s. */
+        /* Check for embedded NUL-s */
         if (strlen(buffer) != linelen) {
             errno = EINVAL;
             goto error;
         }
-        /* Remove whitespace. */
+        /* Remove whitespace */
         line = strip_whitespace(buffer);
         linelen = strlen(line);
-        /* Lines from here on are "significant". */
+        /* Lines from here on are "significant" */
         ret++;
-        /* Ignore empty lines and comments. */
+        /* Ignore empty lines and comments */
         if (linelen == 0 || line[0] == '#' || line[0] == ';')
             continue;
-        /* Check for section idenfitier. */
+        /* Check for section idenfitier */
         if (line[0] == '[' && line[linelen - 1] == ']') {
-            /* Drain section into file structure. */
+            /* Drain section into file structure */
             section = malloc(sizeof(cursec));
             if (section == NULL) goto error;
             *section = cursec;
             conffile_add(&curfile, section);
-            /* Start new section. */
+            /* Start new section */
             cursec.data = NULL;
             line[linelen - 1] = '\0';
             cursec.name = strdup(line + 1);
             if (! cursec.name) goto error;
             continue;
         }
-        /* Parse a key-value pair. */
+        /* Parse a key-value pair */
         eq = strchr(line, '=');
         if (eq == NULL) {
             errno = EINVAL;
             goto error;
         }
         *eq++ = '\0';
-        /* Extract key and value. */
+        /* Extract key and value */
         curpair.key = strdup(strip_whitespace(line));
         if (curpair.key == NULL) goto error;
         curpair.value = strdup(strip_whitespace(eq));
         if (curpair.value == NULL) goto error;
-        /* Add to current section. */
+        /* Add to current section */
         pair = malloc(sizeof(curpair));
         if (pair == NULL) goto error;
         *pair = curpair;
@@ -355,7 +355,7 @@ int conffile_parse(struct conffile *file, int *curline) {
         curpair.key = NULL;
         curpair.value = NULL;
     }
-    /* Add last section to file as well. */
+    /* Add last section to file as well */
     section = malloc(sizeof(cursec));
     if (section == NULL) goto error;
     *section = cursec;
@@ -368,11 +368,11 @@ int conffile_parse(struct conffile *file, int *curline) {
     file->sections = curfile.sections;
     curfile.sections = NULL;
     goto end;
-    /* An error happened. */
+    /* An error happened */
     error:
         ret = -1;
     end:
-        /* Deallocate structures if necessary. */
+        /* Deallocate structures if necessary */
         free(buffer);
         conffile_del(&curfile);
         section_del(&cursec);

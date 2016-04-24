@@ -16,7 +16,7 @@ ssize_t readline(FILE *f, char **buffer, size_t *size) {
     int ch, done = 0;
     clearerr(f);
     for (;;) {
-        /* (Re)allocate buffer if necessary. */
+        /* (Re)allocate buffer if necessary */
         if (*buffer == NULL) {
             *size = DEFAULT_BUFSIZE;
             *buffer = malloc(*size);
@@ -26,9 +26,9 @@ ssize_t readline(FILE *f, char **buffer, size_t *size) {
             *buffer = realloc(*buffer, *size);
             if (*buffer == NULL) return -1;
         }
-        /* Abort if necessary and space for the NUL is there. */
+        /* Abort if necessary and space for the NUL is there */
         if (done) break;
-        /* Read character. */
+        /* Read character */
         ch = fgetc(f);
         if (ch == EOF) {
             if (ferror(f)) {
@@ -37,27 +37,27 @@ ssize_t readline(FILE *f, char **buffer, size_t *size) {
             }
             break;
         }
-        /* Append to buffer. */
+        /* Append to buffer */
         (*buffer)[buflen++] = ch;
         /* Do not abort here to allow space allocation to run again for the
-         * terminating NUL. */
+         * terminating NUL */
         if (ch == LF) done = 1;
     }
-    /* Done. */
+    /* Done */
     (*buffer)[buflen] = '\0';
     return buflen;
 }
 
 /* Remove leading and trailing whitespace from a string */
 char *strip_whitespace(char *string) {
-    /* Determine string length. */
+    /* Determine string length */
     size_t len = strlen(string);
-    /* Find left non-space character. */
+    /* Find left non-space character */
     while (len && isspace(string[len - 1])) len--;
-    /* Replace character after it with NUL. */
+    /* Replace character after it with NUL */
     string[len] = '\0';
-    /* Skip leading whitespace. */
+    /* Skip leading whitespace */
     while (*string && isspace(*string)) string++;
-    /* Return result. */
+    /* Return result */
     return string;
 }

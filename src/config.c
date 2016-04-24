@@ -80,7 +80,7 @@ int config_update(struct config *conf, int quiet) {
     struct section *sec;
     struct program *prog, *nextprog;
     int ret = 0;
-    /* No file present -> Nothing to do. */
+    /* No file present -> Nothing to do */
     if (! conf->conffile) return 0;
     /* Re-parse configuration file */
     if (conf->conffile->fp) {

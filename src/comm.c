@@ -7,7 +7,8 @@
 
 #include "comm.h"
 
-#define CREDBUF_SIZE 64
+/* Size of ancillary data buffer */
+#define ANCBUF_SIZE 256
 
 /* Static function */
 static int setup_addr(struct sockaddr_un *addr, struct config *conf);
@@ -24,6 +25,12 @@ void comm_del(struct ctlmsg *msg) {
     msg->creds.pid = -1;
     msg->creds.uid = -1;
     msg->creds.gid = -1;
+    if (msg->fds[0] != -1) close(msg->fds[0]);
+    if (msg->fds[1] != -1) close(msg->fds[1]);
+    if (msg->fds[2] != -1) close(msg->fds[2]);
+    msg->fds[0] = -1;
+    msg->fds[1] = -1;
+    msg->fds[2] = -1;
 }
 
 /* Free all ressources associated with the given message, and it itself */
@@ -90,25 +97,19 @@ int comm_connect(struct config *conf) {
 }
 
 /* Receive a message from the communication socket */
-int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
-              socklen_t *addrlen) {
-    char buf[MSG_MAXLEN], credbuf[CREDBUF_SIZE];
+int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr) {
+    char buf[MSG_MAXLEN], credbuf[ANCBUF_SIZE];
     int ret, i, j;
-    struct sockaddr_un raddr;
+    struct addr raddr;
     struct iovec bufvec;
     struct msghdr hdr;
     struct cmsghdr *cmsg;
     /* Deallocate old data */
     comm_del(msg);
-    /* Verify arguments */
-    if (addr && ! addrlen) {
-        errno = EFAULT;
-        return -1;
-    }
     /* Prepare buffers for receiving */
     bufvec.iov_base = buf;
     bufvec.iov_len = sizeof(buf);
-    hdr.msg_name = &raddr;
+    hdr.msg_name = &raddr.addr;
     hdr.msg_namelen = sizeof(raddr);
     hdr.msg_iov = &bufvec;
     hdr.msg_iovlen = 1;
@@ -118,10 +119,10 @@ int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
     /* Actually read message */
     ret = recvmsg(fd, &hdr, 0);
     if (ret == -1) return -1;
+    raddr.addrlen = hdr.msg_namelen;
     /* Check for invalid messages */
     if (ret != 0 && buf[ret - 1]) {
-        if (comm_senderr(fd, "BADMSG", "Bad message", &raddr,
-                         hdr.msg_namelen) == -1) {
+        if (comm_senderr(fd, "BADMSG", "Bad message", &raddr) == -1) {
             return -1;
         } else {
             return 0;
@@ -155,20 +156,29 @@ int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
     }
     /* Retrieve ancillary data */
     for (cmsg = CMSG_FIRSTHDR(&hdr); cmsg; cmsg = CMSG_NXTHDR(&hdr, cmsg)) {
-        if (cmsg->cmsg_level != SOL_SOCKET ||
-                cmsg->cmsg_type != SCM_CREDENTIALS)
-            continue;
-        struct ucred *creds = (struct ucred *) CMSG_DATA(cmsg);
-        msg->creds.pid = creds->pid;
-        msg->creds.uid = creds->uid;
-        msg->creds.gid = creds->gid;
-        break;
+        if (cmsg->cmsg_level != SOL_SOCKET) continue;
+        if (cmsg->cmsg_type == SCM_RIGHTS) {
+            /* Obtain buffer and length */
+            int *fds = (int *) CMSG_DATA(cmsg);
+            int len = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+            /* Close FD-s if incorrect amount passed or some are already
+             * present */
+            if (len != 3 || msg->fds[0] != -1) {
+                while (len--) close(*fds++);
+                continue;
+            }
+            /* Otherwise, copy into buffer */
+            msg->fds[0] = fds[0];
+            msg->fds[1] = fds[1];
+            msg->fds[2] = fds[2];
+        } else if (cmsg->cmsg_type == SCM_CREDENTIALS) {
+            if (msg->creds.pid != -1) continue;
+            struct ucred *creds = (struct ucred *) CMSG_DATA(cmsg);
+            msg->creds = *creds;
+        }
     }
-    /* Zero-pad raddr; fill in addr */
-    if (addr) {
-        *addr = raddr;
-        *addrlen = hdr.msg_namelen;
-    }
+    /* Fill in addr */
+    if (addr) *addr = raddr;
     /* Done */
     return ret;
     /* Error while allocating payload */
@@ -178,9 +188,8 @@ int comm_recv(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
 }
 
 /* Send a message through the communication socket */
-int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
-              socklen_t addrlen) {
-    char buf[MSG_MAXLEN], credbuf[CREDBUF_SIZE];
+int comm_send(int fd, struct ctlmsg *msg, struct addr *addr) {
+    char buf[MSG_MAXLEN], credbuf[ANCBUF_SIZE];
     int buflen = 0, i;
     struct iovec bufvec;
     struct msghdr hdr;
@@ -207,30 +216,41 @@ int comm_send(int fd, struct ctlmsg *msg, struct sockaddr_un *addr,
     /* Populate structures */
     bufvec.iov_base = buf;
     bufvec.iov_len = buflen;
-    hdr.msg_name = addr;
-    hdr.msg_namelen = addrlen;
+    hdr.msg_name = (addr) ? &addr->addr : NULL;
+    hdr.msg_namelen = (addr) ? addr->addrlen : 0;
     hdr.msg_iov = &bufvec;
     hdr.msg_iovlen = 1;
     hdr.msg_control = credbuf;
     hdr.msg_controllen = CMSG_SPACE(sizeof(struct ucred));
     hdr.msg_flags = 0;
+    /* Populate ancillary messages */
     cmsg = CMSG_FIRSTHDR(&hdr);
     cmsg->cmsg_len = CMSG_LEN(sizeof(struct ucred));
     cmsg->cmsg_level = SOL_SOCKET;
     cmsg->cmsg_type = SCM_CREDENTIALS;
     memcpy(CMSG_DATA(cmsg), &msg->creds, sizeof(msg->creds));
+    /* Add file descriptors if necessary */
+    if (msg->fds[0] != -1 && msg->fds[1] != -1 && msg->fds[2] != -1) {
+        hdr.msg_controllen += CMSG_SPACE(sizeof(msg->fds));
+        cmsg = CMSG_NXTHDR(&hdr, cmsg);
+        cmsg->cmsg_len = CMSG_LEN(sizeof(msg->fds));
+        cmsg->cmsg_level = SOL_SOCKET;
+        cmsg->cmsg_type = SCM_RIGHTS;
+        memcpy(CMSG_DATA(cmsg), msg->fds, sizeof(msg->fds));
+    }
     /* Send message */
     return sendmsg(fd, &hdr, 0);
 }
 
 /* Send an error message */
-int comm_senderr(int fd, char *errcode, char *errmsg,
-                 struct sockaddr_un *addr, socklen_t addrlen) {
+int comm_senderr(int fd, char *errcode, char *errmsg, struct addr *addr) {
     /* Prepare message */
     char *fields[] = { "", errcode, errmsg };
-    struct ctlmsg msg = { 3, fields, { -1, -1, -1 } };
+    struct ctlmsg msg = CTLMSG_INIT;
+    msg.fieldnum = 3;
+    msg.fields = fields;
     /* Deliver message */
-    return comm_send(fd, &msg, addr, addrlen);
+    return comm_send(fd, &msg, addr);
 }
 
 /* Common address preparation */

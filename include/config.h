@@ -102,9 +102,9 @@ struct config {
  * act_start  : (struct action *) The action to start the program. If not
  *              configured, starting fails.
  * act_restart: (struct action *) The action to restart the program. If not
- *              configured, the program is stopped and started; if
- *              configured, the PID of the resulting process replaces the old
- *              recorded one.
+ *              configured, the program is stopped (if running) and started
+ *              (again); if configured, the PID of the resulting process
+ *              replaces the old recorded one.
  * act_reload : (struct action *) The action to reload configuration. If not
  *              configured, the program is restarted (using act_restart).
  * act_signal : (struct action *) An arbitrary user-defined action. The
