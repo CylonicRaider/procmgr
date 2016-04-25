@@ -31,8 +31,7 @@ struct job {
 
 /* A job queue
  * Members:
- * head, tail: (struct job *) The first/last job in this queue.
- */
+ * head, tail: (struct job *) The first/last job in this queue. */
 struct jobqueue {
     struct job *head;
     struct job *tail;

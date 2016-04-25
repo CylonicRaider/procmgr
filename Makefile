@@ -1,3 +1,5 @@
+# procmgr -- init-like process manager
+# https://github.com/CylonicRaider/procmgr
 
 SRCDIR = src
 OBJDIR = obj
