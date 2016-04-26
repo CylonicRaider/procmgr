@@ -9,7 +9,7 @@
 #include "config.h"
 
 /* Static functions/constants */
-static int parse_int(int *ret, char *value);
+static int parse_int(int *ret, char *value, int accept_none);
 static struct action **action_pointer(struct program *prog, char *name);
 static void action_free(struct action **act);
 
@@ -137,7 +137,7 @@ int config_update(struct config *conf, int quiet) {
         /* Default UID */
         pair = section_get_last(sec, "allow-uid");
         if (pair) {
-            if (! parse_int(&value, pair->value)) {
+            if (! parse_int(&value, pair->value, 1)) {
                 if (! quiet) perror("Could not parse default UID");
                 return -1;
             }
@@ -146,7 +146,7 @@ int config_update(struct config *conf, int quiet) {
         /* Default GID */
         pair = section_get_last(sec, "allow-gid");
         if (pair) {
-            if (! parse_int(&value, pair->value)) {
+            if (! parse_int(&value, pair->value, 1)) {
                 if (! quiet) perror("Could not parse default GID");
                 return -1;
             }
@@ -275,9 +275,12 @@ struct program *prog_new(struct config *conf, struct section *config) {
     if (config) {
         /* Update default UID and GID */
         pair = section_get_last(config, "allow-uid");
-        if (pair && ! parse_int(&def_uid, pair->value)) goto error;
+        if (pair && ! parse_int(&def_uid, pair->value, 1)) goto error;
         pair = section_get_last(config, "allow-gid");
-        if (pair && ! parse_int(&def_gid, pair->value)) goto error;
+        if (pair && ! parse_int(&def_gid, pair->value, 1)) goto error;
+        /* Update restarting delay */
+        pair = section_get_last(config, "restart-delay");
+        if (pair && ! parse_int(&ret->delay, pair->value, 1)) goto error;
         /* Initialize actions */
         for (i = 0; i < action_count; i++) {
             /* Set command */
@@ -291,10 +294,10 @@ struct program *prog_new(struct config *conf, struct section *config) {
             act->allow_uid = def_uid;
             act->allow_gid = def_gid;
             pair = section_get_last(config, action_names[i].uid);
-            if (pair && ! parse_int(&act->allow_uid, pair->value))
+            if (pair && ! parse_int(&act->allow_uid, pair->value, 1))
                 goto error;
             pair = section_get_last(config, action_names[i].gid);
-            if (pair && ! parse_int(&act->allow_gid, pair->value))
+            if (pair && ! parse_int(&act->allow_gid, pair->value, 1))
                 goto error;
             /* Insert into structure */
             *action_pointer(ret, action_names[i].base) = act;
@@ -345,12 +348,12 @@ void prog_free(struct program *prog) {
     free(prog);
 }
 
-/* Parse an integer literal ("none" maps to -1)
+/* Parse an integer literal ("none" maps to -1 if accept_none is one)
  * Returns whether successful; errno is set if not. */
-int parse_int(int *ret, char *data) {
+int parse_int(int *ret, char *data, int accept_none) {
     char *end;
     int temp;
-    if (strcmp(data, "none") == 0) {
+    if (accept_none == 1 && strcmp(data, "none") == 0) {
         *ret = -1;
         return 1;
     }

@@ -20,6 +20,7 @@
  *     cmd-<action> = <shell command to run for the given action>
  *     uid-<action> = <UID to allow to perform this action>
  *     gid-<action> = <GID to allow to perform this action>
+ *     restart-delay = <seconds after which approximately to restart>
  *
  * Arbitrarily many program sections can be specified; out of same-named
  * ones, only the last is considered; similarly for all values. Spacing
@@ -98,9 +99,7 @@ struct config {
  * pid        : (int) PID of the instance of the program currently running,
  *              or -1 if none.
  * flags      : (int) Flags. See the PROG_* constants for descriptions.
- * delay      : (int) Restart delay in seconds. Reset to one after a
- *              successful program termination, and increased exponentially
- *              (by two times) after each failed automatic process death.
+ * delay      : (int) Restart delay in seconds.
  * prev, next : (struct program *) Linked list interconnection.
  * act_start  : (struct action *) The action to start the program. If not
  *              configured, starting fails.

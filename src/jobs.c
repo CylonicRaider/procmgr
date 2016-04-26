@@ -1,9 +1,11 @@
 /* procmgr -- init-like process manager
  * https://github.com/CylonicRaider/procmgr */
 
+#include <math.h>
 #include <stdlib.h>
 
 #include "jobs.h"
+#include "util.h"
 
 /* Create a new empty job queue */
 struct jobqueue *jobqueue_new() {
@@ -30,6 +32,7 @@ struct job *job_new(char *filename, char **argv, char **envp) {
     ret->filename = filename;
     ret->argv = argv;
     ret->envp = envp;
+    ret->notBefore = NAN;
     ret->waitfor = -1;
     return ret;
 }
@@ -42,9 +45,11 @@ void job_del(struct job *job) {
     free(job->filename);
     free(job->argv);
     free(job->envp);
+    job->callback = NULL;
     job->filename = NULL;
     job->argv = NULL;
     job->envp = NULL;
+    job->notBefore = NAN;
     job->waitfor = -1;
     if (job->successor) job_free(job->successor);
     job->successor = NULL;
@@ -113,9 +118,12 @@ struct job *jobqueue_take(struct jobqueue *queue, struct job *job) {
 /* Get all the jobs matching the given PID from the queue */
 struct job *jobqueue_getfor(struct jobqueue *queue, int pid) {
     struct job *ret = NULL, *cur, *prev;
+    double now = timestamp();
     for (cur = queue->tail; cur; cur = prev) {
         prev = cur->prev;
-        if (cur->waitfor == pid) {
+        if (! isnan(cur->notBefore) && cur->notBefore > now) {
+            continue;
+        } else if (cur->waitfor == pid) {
             jobqueue_take(queue, cur);
             if (ret) ret->prev = cur;
             cur->next = ret;
