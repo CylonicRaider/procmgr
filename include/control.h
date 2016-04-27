@@ -17,14 +17,16 @@
 /* Obtain the program corresponding to the request
  * If addr is not NULL, an error message is sent there if there is no such
  * program or action.
- * Returns the program, or NULL if none. */
+ * Returns the program, or NULL if none. The only known mode of failure for
+ * this are segmentation faults, so errors are not indicated specially. */
 struct program *get_program(struct config *config, struct ctlmsg *msg,
                             struct addr *addr);
 
 /* Obtain the action corresponding to the request
  * If addr is not NULL, an error message is sent there if there is no such
  * program or action.
- * Returns the action, or NULL if none. */
+ * Returns the action, or NULL if none; also see the return value remarks of
+ * get_program(). */
 struct action *get_action(struct program *program, struct ctlmsg *msg,
                           struct addr *addr);
 

@@ -179,9 +179,10 @@ struct pair *pair_last(struct pair *pair);
  * currently being parsed; in case of errors appearing, it can be used to
  * provide more meaningful information.
  * The return value is the amount of "meaningful" (i.e., non-empty
- * non-comemnt) lines read, or -1 on error with errno set (possible errors
- * include EIO if something happens while reading itself, ENOMEM in case of
- * an OOM, or EINVAL if the syntax is invalid).
+ * non-comemnt) lines read, -1 on a fatal error with errno set (possible
+ * errors include EIO if something happens while reading itself, ENOMEM in
+ * case of an OOM), or -2 on a minor error (with errno set as well; possible
+ * errors include EINVAL for invalid syntax).
  * NOTE that syntax errors are considered fatal; in case those (or any other
  *      errors) appear, file remains unchanged. */
 int conffile_parse(struct conffile *file, int *curline);

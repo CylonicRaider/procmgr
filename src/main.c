@@ -69,8 +69,12 @@ int main(int argc, char *argv[]) {
     /* Main loop */
     if (listen) {
         for (;;) {
-            if (comm_recv(fd, &msg, &addr) == -1)
+            int res = comm_recv(fd, &msg, &addr);
+            if (res == -1) {
                 die("comm_recv");
+            } else if (res == -2) {
+                continue;
+            }
             print_msg(stdout, &msg);
             if (comm_send(fd, &msg, &addr) == -1)
                 die("comm_send");
@@ -118,7 +122,7 @@ int main(int argc, char *argv[]) {
             if (comm_send(fd, &msg, NULL) == -1)
                 die("comm_send");
             /* Receive reply */
-            if (comm_recv(fd, &msg2, NULL) == -1)
+            if (comm_recv(fd, &msg2, NULL) < 0)
                 die("comm_recv");
             print_msg(stdout, &msg2);
         }

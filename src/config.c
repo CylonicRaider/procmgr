@@ -46,7 +46,7 @@ struct config *config_new(struct conffile *file, int quiet) {
     }
     ret->socket = -1;
     ret->conffile = file;
-    if (config_update(ret, quiet) == -1) {
+    if (config_update(ret, quiet) < 0) {
         ret->conffile = NULL;
         goto error;
     }
@@ -102,11 +102,12 @@ int config_update(struct config *conf, int quiet) {
             return -1;
         }
         /* Parse */
-        if (conffile_parse(conf->conffile, &lineno) == -1) {
+        ret = conffile_parse(conf->conffile, &lineno);
+        if (ret < 0) {
             if (! quiet)
                 fprintf(stderr, "Could not parse configuration file "
                     "(line %d): %s\n", lineno, strerror(errno));
-            return -1;
+            return ret;
         }
     }
     /* Reset global members */
@@ -130,7 +131,7 @@ int config_update(struct config *conf, int quiet) {
             if (conf->socketpath) free(conf->socketpath);
             conf->socketpath = strdup(pair->value);
             if (! conf->socketpath) {
-                if (! quiet) perror("Could not allocte string");
+                if (! quiet) perror("Could not allocate string");
                 return -1;
             }
         }
@@ -139,7 +140,7 @@ int config_update(struct config *conf, int quiet) {
         if (pair) {
             if (! parse_int(&value, pair->value, 1)) {
                 if (! quiet) perror("Could not parse default UID");
-                return -1;
+                return -2;
             }
             conf->def_uid = value;
         }
@@ -148,7 +149,7 @@ int config_update(struct config *conf, int quiet) {
         if (pair) {
             if (! parse_int(&value, pair->value, 1)) {
                 if (! quiet) perror("Could not parse default GID");
-                return -1;
+                return -2;
             }
             conf->def_gid = value;
         }

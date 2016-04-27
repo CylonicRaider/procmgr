@@ -125,7 +125,7 @@ int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr) {
         if (comm_senderr(fd, "BADMSG", "Bad message", &raddr) == -1) {
             return -1;
         } else {
-            return 0;
+            return -2;
         }
     }
     /* Dissect contents */
@@ -198,11 +198,6 @@ int comm_send(int fd, struct ctlmsg *msg, struct addr *addr) {
     msg->creds.pid = getpid();
     msg->creds.uid = geteuid();
     msg->creds.gid = getegid();
-    /* Reject empty messages */
-    if (msg->fieldnum == 0) {
-        errno = EINVAL;
-        return -1;
-    }
     /* Assemble message into buffer */
     for (i = 0; i < msg->fieldnum; i++) {
         int l = strlen(msg->fields[i]) + 1;

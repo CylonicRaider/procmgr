@@ -83,10 +83,10 @@ int comm_connect(struct config *conf);
  * is filled with -1's.
  * If addr is not NULL, the address where the message originates from is
  * stored in there.
- * Returns the amount of bytes received, zero if an invalid message was
- * received (having replied with an error messgae; it is the caller's
- * obligation to restart the call if desired), or -1 on error, with errno
- * set.
+ * Returns the amount of bytes received (which may be zero), -2 if an invalid
+ * message was received (having replied with an error messgae; it is the
+ * caller's obligation to restart the call if desired), or -1 on error, with
+ * errno set.
  * NOTE that a maximum length of MSG_MAXLEN is enforced; messages longer than
  *      that are rejected and an error message is sent. */
 int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr);

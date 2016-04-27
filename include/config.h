@@ -187,8 +187,8 @@ void config_free(struct config *conf);
  * whose configuration values have changed retain their runtime data; new
  * programs are added to the configuration, and not started.
  * Returns the amount of programs affected on success (removed ones count
- * positively), or -1 on error with errno set, having written a message to
- * stderr first (if quiet is true). */
+ * positively), or -1 on fatal or -2 on non-fatal error with errno set,
+ * having written a message to stderr first (if quiet is true). */
 int config_update(struct config *conf, int quiet);
 
 /* Add the given program to the configuration, merging the entries if

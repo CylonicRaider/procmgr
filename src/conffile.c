@@ -292,7 +292,7 @@ struct pair *pair_last(struct pair *pair) {
 int conffile_parse(struct conffile *file, int *curline) {
     char *buffer = NULL, *line, *eq;
     size_t buflen, linelen;
-    int ret = 0;
+    int ret = -1;
     struct conffile curfile = { NULL, NULL };
     struct section cursec = { NULL, NULL, NULL, NULL }, *section;
     struct pair curpair = { NULL, NULL, NULL, NULL }, *pair;
@@ -304,11 +304,11 @@ int conffile_parse(struct conffile *file, int *curline) {
         /* Actually read line */
         linelen = readline(file->fp, &buffer, &buflen);
         if (linelen == 0) break;
-        if (linelen == -1) goto error;
+        if (linelen == -1) goto end;
         /* Check for embedded NUL-s */
         if (strlen(buffer) != linelen) {
             errno = EINVAL;
-            goto error;
+            goto minerror;
         }
         /* Remove whitespace */
         line = strip_whitespace(buffer);
@@ -322,31 +322,31 @@ int conffile_parse(struct conffile *file, int *curline) {
         if (line[0] == '[' && line[linelen - 1] == ']') {
             /* Drain section into file structure */
             section = malloc(sizeof(cursec));
-            if (! section) goto error;
+            if (! section) goto end;
             *section = cursec;
             conffile_add(&curfile, section);
             /* Start new section */
             cursec.data = NULL;
             line[linelen - 1] = '\0';
             cursec.name = strdup(line + 1);
-            if (! cursec.name) goto error;
+            if (! cursec.name) goto end;
             continue;
         }
         /* Parse a key-value pair */
         eq = strchr(line, '=');
         if (! eq) {
             errno = EINVAL;
-            goto error;
+            goto minerror;
         }
         *eq++ = '\0';
         /* Extract key and value */
         curpair.key = strdup(strip_whitespace(line));
-        if (! curpair.key) goto error;
+        if (! curpair.key) goto end;
         curpair.value = strdup(strip_whitespace(eq));
-        if (! curpair.value) goto error;
+        if (! curpair.value) goto end;
         /* Add to current section */
         pair = malloc(sizeof(curpair));
-        if (! pair) goto error;
+        if (! pair) goto end;
         *pair = curpair;
         section_add(&cursec, pair);
         curpair.key = NULL;
@@ -354,7 +354,7 @@ int conffile_parse(struct conffile *file, int *curline) {
     }
     /* Add last section to file as well */
     section = malloc(sizeof(cursec));
-    if (! section) goto error;
+    if (! section) goto end;
     *section = cursec;
     conffile_add(file, section);
     cursec.data = NULL;
@@ -364,10 +364,11 @@ int conffile_parse(struct conffile *file, int *curline) {
         section_free(file->sections);
     file->sections = curfile.sections;
     curfile.sections = NULL;
+    ret = 0;
     goto end;
-    /* An error happened */
-    error:
-        ret = -1;
+    /* A minor error happened */
+    minerror:
+        ret = -2;
     end:
         /* Deallocate structures if necessary */
         free(buffer);
