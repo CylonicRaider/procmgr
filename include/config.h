@@ -218,4 +218,8 @@ void prog_free(struct program *prog);
 /* Return the action named by name from prog, or NULL if none */
 struct action *prog_action(struct program *prog, char *name);
 
+/* Return the name of the given action (as a statically allocated string)
+ * Returns NULL if the action is not part of the program */
+char *action_name(struct action *act, struct program *prog);
+
 #endif

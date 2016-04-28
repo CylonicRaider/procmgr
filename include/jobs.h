@@ -2,26 +2,34 @@
  * https://github.com/CylonicRaider/procmgr */
 
 /* Job queue management
- * Each job contains a set of parameters for an execve() call, an optional
- * PID which delays the job until the process specified dies, and an optional
- * "successor" job, which is scheduled to wait on the process of this job
- * once it is started. Successor jobs are queued before any other jobs that
- * could reference the same PID (i.e., in the very beginning of the queue).
- */
+ * Each job contains a callback and a data pointer for the callback, an
+ * optional PID which delays the job until the process specified dies, and an
+ * optional "successor" job, which is scheduled to wait on the process of
+ * this job once it is started. Successor jobs are queued before any other
+ * jobs that could reference the same PID (i.e., in the very beginning of the
+ * queue). */
 
 #ifndef _JOBS_H
 #define _JOBS_H
 
-/* Call-back type for jobs */
-typedef int job_func_t(char *, char **, char **);
+/* Callback type for jobs
+ * The argument is passed through from the job structure. The callback is
+ * expected to return the PID of the process spawned, 0 when no process was
+ * spawned, or -1 on error (with errno set). */
+typedef int job_func_t(void *);
+
+/* Destructor for auxillary job data
+ * The function is called when the job is destroyed. The pointer is the
+ * auxillary data pointer as obtained from the job structure. */
+typedef void job_destr_t(void *);
 
 /* A single job
  * Members:
- * callback  : (job_func_t *) The function to run in this job. If NULL, a new
- *             process is forked, and execve() is used in there.
- * filename  : (char *) The file to spawn when this job is started.
- * argv      : (char **) Argument vector to pass to the program spawned.
- * envp      : (char **) Environment to pass to the program.
+ * callback  : (job_func_t *) The function to run in this job. May be NULL,
+ *             although such a job is rather pointless.
+ * destroy   : (job_destr_t *) Deallocate the data pointer for this job.
+ *             May be NULL (but should not be in most cases).
+ * data      : (void *) The data to pass to the callback.
  * waitfor   : (int) The PID of a process this job is waiting for.
  * notBefore : (double) The UNIX timestamp before which to ignore this job.
  *             Used to implement delays.
@@ -29,9 +37,8 @@ typedef int job_func_t(char *, char **, char **);
  * prev, next: (struct job *) Linked list interconnection. */
 struct job {
     job_func_t *callback;
-    char *filename;
-    char **argv;
-    char **envp;
+    job_destr_t *destroy;
+    void *data;
     int waitfor;
     double notBefore;
     struct job *successor;
@@ -56,17 +63,23 @@ void jobqueue_del(struct jobqueue *queue);
 void jobqueue_free(struct jobqueue *queue);
 
 /* Create a new job with the given parameters */
-struct job *job_new(char *filename, char **argv, char **envp);
+struct job *job_new(job_func_t *callback, job_destr_t *destroy, void *data);
 
 /* Deinitialize this job and deallocate all of its successors
- * This assumes that all strings (and the arrays) are dynamically allocated.
- * Dispose of them manually if they are not.
+ * For cleaning up the auxillary data, the configured destructor is invoked;
+ * if none is configured, the data are just discarded, possibly causing a
+ * memory leak.
  * Linked list neigbors are changed to be connected with each other. */
 void job_del(struct job *job);
 
 /* Deinitialize and deallocate this job
  * See also the remarks for job_del(). */
 void job_free(struct job *job);
+
+/* Actually run the callback associated with the job
+ * The return value is the same as the one of the callback (in particular,
+ * -1 on error), or zero if no callback is configured. */
+int job_run(struct job *job);
 
 /* Prepend a job to the queue */
 void jobqueue_prepend(struct jobqueue *queue, struct job *job);

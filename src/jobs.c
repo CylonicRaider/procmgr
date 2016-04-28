@@ -26,12 +26,12 @@ void jobqueue_free(struct jobqueue *queue) {
 }
 
 /* Create a new job with the given parameters */
-struct job *job_new(char *filename, char **argv, char **envp) {
+struct job *job_new(job_func_t *callback, job_destr_t *destroy, void *data) {
     struct job *ret = calloc(1, sizeof(struct job));
     if (! ret) return NULL;
-    ret->filename = filename;
-    ret->argv = argv;
-    ret->envp = envp;
+    ret->callback = callback;
+    ret->destroy = destroy;
+    ret->data = data;
     ret->notBefore = NAN;
     ret->waitfor = -1;
     return ret;
@@ -39,16 +39,10 @@ struct job *job_new(char *filename, char **argv, char **envp) {
 
 /* Deinitialize this job and deallocate all of its successors */
 void job_del(struct job *job) {
-    char **p;
-    if (job->argv) for (p = job->argv; *p; p++) free(*p);
-    if (job->envp) for (p = job->envp; *p; p++) free(*p);
-    free(job->filename);
-    free(job->argv);
-    free(job->envp);
+    if (job->destroy) job->destroy(job->data);
     job->callback = NULL;
-    job->filename = NULL;
-    job->argv = NULL;
-    job->envp = NULL;
+    job->destroy = NULL;
+    job->data = NULL;
     job->notBefore = NAN;
     job->waitfor = -1;
     if (job->successor) job_free(job->successor);
@@ -74,6 +68,14 @@ void job_free(struct job *job) {
     }
     job_del(job);
     free(job);
+}
+
+/* Actually run the callback associated with the job
+ * The return value is the same as the one of the callback (in particular,
+ * -1 on error), or zero if no callback is configured. */
+int job_run(struct job *job) {
+    if (! job->callback) return 0;
+    return job->callback(job->data);
 }
 
 /* Prepend a job to the queue */

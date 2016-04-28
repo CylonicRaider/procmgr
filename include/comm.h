@@ -11,8 +11,8 @@
 
 /* Requires _GNU_SOURCE. */
 
-#ifndef _CONTROL_H
-#define _CONTROL_H
+#ifndef _COMM_H
+#define _COMM_H
 
 #include <sys/socket.h>
 #include <sys/types.h>

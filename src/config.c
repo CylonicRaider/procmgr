@@ -349,6 +349,17 @@ void prog_free(struct program *prog) {
     free(prog);
 }
 
+/* Return the name of the given action (as a statically allocated string) */
+char *action_name(struct action *act, struct program *prog) {
+    if (act == prog->act_start  ) return "start";
+    if (act == prog->act_restart) return "restart";
+    if (act == prog->act_reload ) return "reload";
+    if (act == prog->act_signal ) return "signal";
+    if (act == prog->act_stop   ) return "stop";
+    if (act == prog->act_status ) return "status";
+    return NULL;
+}
+
 /* Parse an integer literal ("none" maps to -1 if accept_none is one)
  * Returns whether successful; errno is set if not. */
 int parse_int(int *ret, char *data, int accept_none) {
