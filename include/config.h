@@ -147,6 +147,7 @@ struct program {
  * is recorded as the PID of the program as a whole; thus, the command for
  * these actions should preferably exec() the actual service to be run.
  * Members:
+ * name     : (char *) The (statically allocated) name of this action.
  * command  : (char *) Shell command to be invoked when the action is
  *            requested.
  * allow_uid: (int) UID to allow to perform this action. For the action to
@@ -157,6 +158,7 @@ struct program {
  *            similar to allow_uid (except for the EUID 0 clause).
  */
 struct action {
+    char *name;
     char *command;
     int allow_uid;
     int allow_gid;
@@ -217,9 +219,5 @@ void prog_free(struct program *prog);
 
 /* Return the action named by name from prog, or NULL if none */
 struct action *prog_action(struct program *prog, char *name);
-
-/* Return the name of the given action (as a statically allocated string)
- * Returns NULL if the action is not part of the program */
-char *action_name(struct action *act, struct program *prog);
 
 #endif

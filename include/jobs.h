@@ -20,7 +20,9 @@ typedef int job_func_t(void *);
 
 /* Destructor for auxillary job data
  * The function is called when the job is destroyed. The pointer is the
- * auxillary data pointer as obtained from the job structure. */
+ * auxillary data pointer as obtained from the job structure.
+ * NOTE that the prototype is compatible to free(), which might be usable
+ *      if only the data itself are dynamically allocated. */
 typedef void job_destr_t(void *);
 
 /* A single job

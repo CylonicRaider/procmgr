@@ -14,10 +14,7 @@ static struct action **action_pointer(struct program *prog, char *name);
 static void action_free(struct action **act);
 
 static struct actionname {
-    char *base;
-    char *cmd;
-    char *uid;
-    char *gid;
+    char *base, *cmd, *uid, *gid;
 } action_names[] = {
     { "start",   "cmd-start",   "uid-start",   "gid-start"   },
     { "restart", "cmd-restart", "uid-restart", "gid-restart" },
@@ -289,6 +286,7 @@ struct program *prog_new(struct config *conf, struct section *config) {
             if (! pair) continue;
             act = calloc(1, sizeof(struct action));
             if (! act) goto error;
+            act->name = action_names[i].base;
             act->command = strdup(pair->value);
             if (! act->command) goto error;
             /* Set up UID and GID */
@@ -349,17 +347,6 @@ void prog_free(struct program *prog) {
     free(prog);
 }
 
-/* Return the name of the given action (as a statically allocated string) */
-char *action_name(struct action *act, struct program *prog) {
-    if (act == prog->act_start  ) return "start";
-    if (act == prog->act_restart) return "restart";
-    if (act == prog->act_reload ) return "reload";
-    if (act == prog->act_signal ) return "signal";
-    if (act == prog->act_stop   ) return "stop";
-    if (act == prog->act_status ) return "status";
-    return NULL;
-}
-
 /* Parse an integer literal ("none" maps to -1 if accept_none is one)
  * Returns whether successful; errno is set if not. */
 int parse_int(int *ret, char *data, int accept_none) {
@@ -403,7 +390,7 @@ struct action **action_pointer(struct program *prog, char *name) {
 }
 
 /* Deallocate the given action object and clear the reference */
-static void action_free(struct action **act) {
+void action_free(struct action **act) {
     if (! *act) return;
     if ((*act)->command) free((*act)->command);
     free(*act);

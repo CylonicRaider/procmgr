@@ -16,31 +16,55 @@
 /* get_reply() encountered an error */
 #define REPLY_ERROR 65535
 
-/* Obtain the program corresponding to the request
- * Returns the program, or NULL if none. The only known mode of failure for
- * this are segmentation faults, so errors are not indicated specially. */
-struct program *get_program(struct config *config, struct ctlmsg *msg);
+/* Server-side representation of a request, as populated and acted upon
+ * by the functions in here.
+ * Members:
+ * config : (struct config *) The configuration this request is related to.
+ * program: (struct program *) The program this request relates to.
+ * action : (struct action *) The action to perform.
+ * argv   : (char **) Auxillary command-line arguments for the action.
+ *          The only dynamically allocated member of the structure.
+ * creds  : (struct ucred) Credentials of the process to submit the request.
+ * fds    : (int [3]) A set of file descriptors to pass to the script.
+ * addr   : (struct addr) The address to send replies to. */
+struct request {
+    struct config *config;
+    struct program *program;
+    struct action *action;
+    char **argv;
+    struct ucred creds;
+    int fds[3];
+    struct addr addr;
+};
 
-/* Obtain the action corresponding to the request
- * Returns the action, or NULL if none; also see the return value remarks of
- * get_program(). */
-struct action *get_action(struct program *program, struct ctlmsg *msg);
+/* Create a request from the given message
+ * It is assumed that the message was verified to contain an appropriate
+ * command.
+ * If the request is incomplete, an error message is sent to addr, and
+ * an error of 0 ("Success") is raised.
+ * Returns a pointer to the request structure, or NULL on failure. */
+struct request *request_new(struct config *config, struct ctlmsg *msg,
+                            struct addr *addr);
 
-/* Verify that the implicitly given credentials are authorized to perform the
- * action
+/* Verify that the credentials given in the request are authorized to
+ * perform the requested action
  * Authorized are credentials where both the UID and GID are not -1; in
  * addition, either the UID must be 0, or the UID or GID must match the
  * corresponding entry in the action.
  * Returns an integer greater than zero if authorization succeeds, zero if
- * it fails, or -1 if a fatal error happens. */
-int validate_action(struct action *action, struct ctlmsg *msg);
+ * it fails (an error message is sent to the client as specified by the
+ * request), or -1 if a fatal error happens. */
+int request_validate(struct request *request);
 
 /* Perform the given action
- * The actual things to do are added to the job queue.
+ * Might perform immediately, or submit a job to the configuration's queue.
  * Returns zero on success, or -1 on failure. */
-int schedule_action(struct config *config, struct program *prog,
-                    struct action *action, struct ctlmsg *msg,
-                    struct addr *addr);
+int request_run(struct request *request);
+
+/* Deallocate the given request after de-initializing it
+ * All associated ressources are freed, including the file descriptors, which
+ * are closed. */
+void request_free(struct request *request);
 
 /* Extract jobs matching the given PID from the queue and spawn them
  * pid may be -1, in that case jobs which do not wait on a particular PID

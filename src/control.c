@@ -7,38 +7,95 @@
 
 #include "control.h"
 
-char *action_names[] = { "start", "restart", "reload", "signal", "stop",
-    "status" };
+/* Static definitions */
+static char *action_names[] = { "start", "restart", "reload", "signal",
+    "stop", "status" };
 #define action_count (sizeof(action_names) / sizeof(*action_names))
+static int request_senderr(struct request *request, char *code, char *desc);
 
-/* Obtain the program corresponding to the request */
-struct program *get_program(struct config *config, struct ctlmsg *msg) {
-    if (msg->fieldnum < 1) return NULL;
-    return config_get(config, msg->fields[0]);
+/* Create a request from the given message */
+struct request *request_new(struct config *config, struct ctlmsg *msg,
+                            struct addr *addr) {
+    int i;
+    /* Allocate structure */
+    struct request *ret = calloc(1, sizeof(struct request));
+    if (ret == NULL) return NULL;
+    /* Check field amount */
+    if (msg->fieldnum < 3) {
+        if (comm_senderr(config->socket, "NOPARAMS", "Missing parameters",
+            addr) == -1) goto error;
+        goto errmsg;
+    }
+    /* Fill in members */
+    ret->config = config;
+    ret->program = config_get(config, msg->fields[1]);
+    if (! ret->program) {
+        if (comm_senderr(config->socket, "NOPROG", "No such program",
+            addr) == -1) goto error;
+        goto errmsg;
+    }
+    ret->action = prog_action(ret->program, msg->fields[2]);
+    if (! ret->action) {
+        if (comm_senderr(config->socket, "NOACTION", "No such action",
+            addr) == -1) goto error;
+        goto errmsg;
+    }
+    ret->argv = calloc(msg->fieldnum - 2, sizeof(char *));
+    if (! ret->argv) goto error;
+    for (i = 3; i < msg->fieldnum; i++) {
+        char *d = strdup(msg->fields[i]);
+        if (! d) goto error;
+        ret->argv[i - 3] = d;
+    }
+    ret->creds = msg->creds;
+    ret->fds[0] = msg->fds[0];
+    ret->fds[1] = msg->fds[1];
+    ret->fds[2] = msg->fds[2];
+    ret->addr = *addr;
+    /* Done */
+    return ret;
+    /* Error handling */
+    errmsg:
+        errno = 0;
+    error:
+        if (ret) request_free(ret);
+        if (msg->fds[0] != -1) close(msg->fds[0]);
+        if (msg->fds[1] != -1) close(msg->fds[1]);
+        if (msg->fds[2] != -1) close(msg->fds[2]);
+        return NULL;
 }
 
-/* Obtain the action corresponding to the request */
-struct action *get_action(struct program *program, struct ctlmsg *msg) {
-    if (msg->fieldnum < 2) return NULL;
-    return prog_action(program, msg->fields[1]);
-}
-
-/* Verify that the implicitly given credentials are authorized to perform the
- * action */
-int validate_action(struct action *action, struct ctlmsg *msg) {
-    if (msg->creds.uid == -1 || msg->creds.gid == -1) return 0;
-    if (msg->creds.uid == 0) return 1;
-    return (msg->creds.uid == action->allow_uid ||
-            msg->creds.gid == action->allow_gid);
+/* Verify that the credentials given in the request are authorized to
+ * perform the requested action */
+int request_validate(struct request *request) {
+    if (request->creds.uid == -1 || request->creds.gid == -1) {
+        return (request_senderr(request, "BADAUTH",
+                                "Not authorized")) ? 0 : -1;
+    }
+    if (request->creds.uid == 0) return 1;
+    if (! (request->creds.uid == request->action->allow_uid ||
+           request->creds.gid == request->action->allow_gid)) {
+        return (request_senderr(request, "BADAUTH",
+                                "Not authorized")) ? 0 : -1;
+    }
+    return 1;
 }
 
 /* Perform the given action */
-int schedule_action(struct config *config, struct program *prog,
-                    struct action *action, struct ctlmsg *msg,
-                    struct addr *addr) {
-    /* NYI */
+int request_run(struct request *request) {
+    /* TODO */
     errno = ENOSYS;
     return -1;
+}
+
+/* Deallocate the given request after de-initializing it */
+void request_free(struct request *request) {
+    if (request->argv) {
+        char **p;
+        for (p = request->argv; *p; p++) free(*p);
+    }
+    free(request->argv);
+    free(request);
 }
 
 /* Extract jobs matching the given PID from the queue and run them */
@@ -69,23 +126,34 @@ int run_jobs(struct config *config, int pid) {
 /* Send a request to perform an action as specified in the argument list */
 int send_request(struct config *config, char **argv) {
     struct ctlmsg msg = CTLMSG_INIT;
+    int i, ret;
     char **p;
-    int i;
     /* Calculate field amount */
+    msg.fieldnum = 1;
     for (p = argv; *p; p++) msg.fieldnum++;
     /* Validate request */
-    if (msg.fieldnum < 2) return 0;
+    if (msg.fieldnum < 3) return 0;
     for (i = 0; i < action_count; i++) {
         if (strcmp(argv[1], action_names[i]) == 0) break;
     }
     if (i == action_count) return 0;
+    /* Allocate data */
+    msg.fields = calloc(msg.fieldnum, sizeof(char *));
+    if (! msg.fields) return -1;
+    msg.fields[0] = "RUN";
+    for (i = 1; i < msg.fieldnum; i++) {
+        msg.fields[i] = argv[i - 1];
+    }
     /* Fill in fields */
-    msg.fields = argv;
     msg.fds[0] = STDIN_FILENO;
     msg.fds[1] = STDOUT_FILENO;
     msg.fds[2] = STDERR_FILENO;
     /* Send! */
-    return comm_send(config->socket, &msg, NULL);
+    ret = comm_send(config->socket, &msg, NULL);
+    /* Clean up */
+    free(msg.fields);
+    /* Done */
+    return ret;
 }
 
 /* Wait for a message to arrive and return the desired return code */
@@ -134,4 +202,11 @@ int get_reply(struct config *config) {
     end:
         comm_del(&msg);
         return ret;
+}
+
+/* Send an error message to the client as specified by the given request,
+ * and return whether that succeeded. */
+int request_senderr(struct request *request, char *code, char *desc) {
+    return (comm_senderr(request->config->socket, code, desc,
+                         &request->addr) != -1);
 }
