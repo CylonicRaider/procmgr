@@ -20,6 +20,7 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
     /* Allocate structure */
     struct request *ret = calloc(1, sizeof(struct request));
     if (ret == NULL) return NULL;
+    ret->fds[0] = ret->fds[1] = ret->fds[2] = -1;
     /* Check field amount */
     if (msg->fieldnum < 3) {
         if (comm_senderr(config->socket, "NOPARAMS", "Missing parameters",
@@ -95,6 +96,9 @@ void request_free(struct request *request) {
         for (p = request->argv; *p; p++) free(*p);
     }
     free(request->argv);
+    if (request->fds[0] != -1) close(request->fds[0]);
+    if (request->fds[1] != -1) close(request->fds[1]);
+    if (request->fds[2] != -1) close(request->fds[2]);
     free(request);
 }
 
