@@ -1,9 +1,14 @@
 /* procmgr -- init-like process manager
  * https://github.com/CylonicRaider/procmgr */
 
+/* TODO: Reply something */
+
 #define _GNU_SOURCE
 #include <errno.h>
+#include <signal.h>
+#include <stdio.h>
 #include <unistd.h>
+#include <sys/types.h>
 
 #include "control.h"
 
@@ -12,6 +17,22 @@ static char *action_names[] = { "start", "restart", "reload", "signal",
     "stop", "status" };
 #define action_count (sizeof(action_names) / sizeof(*action_names))
 static int request_senderr(struct request *request, char *code, char *desc);
+static struct job *submit_job(struct request *request);
+static int _run_request(void *data);
+static void _free_request(void *data);
+static char *concat(char *s1, char *s2);
+
+/* Duplicate a file descriptor or no file descriptor, returning whether
+ * successful */
+static inline int dupfd(int from, int *to) {
+    if (from == -1) {
+        *to = -1;
+        return 1;
+    } else {
+        *to = dup(from);
+        return (*to != -1);
+    }
+}
 
 /* Create a request from the given message */
 struct request *request_new(struct config *config, struct ctlmsg *msg,
@@ -84,9 +105,120 @@ int request_validate(struct request *request) {
 
 /* Perform the given action */
 int request_run(struct request *request) {
-    /* TODO */
-    errno = ENOSYS;
-    return -1;
+    struct program *prog = request->program;
+    struct request *req = NULL;
+    struct job *job;
+    /* Update flags */
+    if (request->action == prog->act_start ||
+            request->action == prog->act_restart) {
+        prog->flags |= PROG_RUNNING;
+    } else if (request->action == prog->act_stop) {
+        prog->flags &= ~PROG_RUNNING;
+    }
+    /* Do something */
+    if (! request->action->command) {
+        /* Perform default actions */
+        if (request->action == prog->act_start) {
+            /* Cannot really do anything */
+            if (request_senderr(request, "NOCMD", "Cannot start"))
+                errno = 0;
+            return -1;
+        } else if (request->action == prog->act_restart) {
+            int res;
+            /* Clone request */
+            struct request *req = calloc(1, sizeof(struct request));
+            if (! dupfd(request->fds[0], &req->fds[0])) goto error;
+            if (! dupfd(request->fds[1], &req->fds[1])) goto error;
+            if (! dupfd(request->fds[2], &req->fds[2])) goto error;
+            req->config = request->config;
+            req->program = prog;
+            req->action = prog->act_start;
+            req->argv = request->argv;
+            req->creds = request->creds;
+            req->addr = request->addr;
+            /* "exec" different action using this request */
+            request->action = prog->act_stop;
+            request->argv = NULL;
+            res = request_run(request);
+            if (res == -1) goto error;
+            /* Dispatch follow-up action */
+            job = submit_job(req);
+            if (! job) goto error;
+            if (res) job->waitfor = res;
+            return 0;
+        } else if (request->action == prog->act_reload) {
+            /* Restart program */
+            request->action = prog->act_restart;
+            return request_run(request);
+        } else if (request->action == prog->act_signal) {
+            /* Do nothing */
+            return 0;
+        } else if (request->action == prog->act_stop) {
+            /* Kill process, if any */
+            if (prog->pid != -1) {
+                return (kill(prog->pid, SIGTERM) == -1) ? -1 : 0;
+            }
+            return 0;
+        } else if (request->action == prog->act_status) {
+            /* Write "running" or "not running" depending on whether there is
+             * a process or not. */
+            int pid = fork();
+            if (pid == 0) {
+                if (prog->pid != -1) {
+                    printf("running\n");
+                    fflush(stdout);
+                    _exit(0);
+                } else {
+                    printf("not running\n");
+                    fflush(stdout);
+                    _exit(1);
+                }
+            }
+            return pid;
+        } else {
+            /* Should not happen at this point */
+            errno = EFAULT;
+            return -1;
+        }
+    } else {
+        char **p, **argv, *envp[5], pidbuf[64];
+        int pid;
+        /* Prepare for job spawning */
+        int l = 3;
+        for (p = request->argv; *p; p++) l++;
+        argv = calloc(l, sizeof(char *));
+        if (! argv) return -1;
+        memcpy(argv + 3, request->argv, (l - 3) * sizeof(char *));
+        argv[0] = ACTION_SHELL;
+        argv[1] = "-c";
+        argv[2] = request->action->command;
+        /* Prepare environment */
+        envp[0] = concat("PATH=", ACTION_PATH);
+        envp[1] = concat("SHELL=", ACTION_SHELL);
+        envp[2] = concat("PROGNAME=", prog->name);
+        envp[3] = concat("ACTION=", request->action->name);
+        if (prog->pid == -1) {
+            envp[4] = "PID=";
+        } else {
+            sprintf(pidbuf, "PID=%d", prog->pid);
+            envp[4] = pidbuf;
+        }
+        /* Spawn child process */
+        pid = fork();
+        if (pid == 0) {
+            /* In child: exec() script */
+            execve(argv[0], argv, envp);
+            _exit(127);
+        }
+        /* Clean up */
+        for (l = 0; l < 4; l++) free(envp[l]);
+        /* Done */
+        return pid;
+    }
+    /* Someting failed */
+    error:
+        if (req) request_free(req);
+        return -1;
 }
 
 /* Deallocate the given request after de-initializing it */
@@ -213,4 +345,33 @@ int get_reply(struct config *config) {
 int request_senderr(struct request *request, char *code, char *desc) {
     return (comm_senderr(request->config->socket, code, desc,
                          &request->addr) != -1);
+}
+
+/* Schedule a job wrapping this request to be run */
+struct job *submit_job(struct request *request) {
+    struct job *ret = job_new(_run_request, _free_request, request);
+    if (! ret) return NULL;
+    jobqueue_append(request->config->jobs, ret);
+    return ret;
+}
+
+/* Execute the payload of the given request */
+int _run_request(void *data) {
+    return request_run(data);
+}
+
+/* Deallocate the given request */
+void _free_request(void *data) {
+    request_free(data);
+}
+
+/* Concatenate two strings */
+char *concat(char *s1, char *s2) {
+    int l1 = strlen(s1), l2 = strlen(s2);
+    char *r = malloc(l1 + l2 + 1);
+    if (! r) return NULL;
+    memcpy(r, s1, l1);
+    memcpy(r + l1, s2, l2);
+    r[l1 + l2] = '\0';
+    return r;
 }

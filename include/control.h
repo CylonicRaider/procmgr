@@ -23,7 +23,8 @@
  * program: (struct program *) The program this request relates to.
  * action : (struct action *) The action to perform.
  * argv   : (char **) Auxillary command-line arguments for the action.
- *          The only dynamically allocated member of the structure.
+ *          The only dynamically allocated member of the structure; may
+ *          be NULL.
  * creds  : (struct ucred) Credentials of the process to submit the request.
  * fds    : (int [3]) A set of file descriptors to pass to the script.
  * addr   : (struct addr) The address to send replies to. */
@@ -58,7 +59,9 @@ int request_validate(struct request *request);
 
 /* Perform the given action
  * Might perform immediately, or submit a job to the configuration's queue.
- * Returns zero on success, or -1 on failure. */
+ * Returns the PID of the process spawned (if any), 0 if none, or -1 on
+ * error, with errno either set to 0 ("Success") on a non-fatal error, or
+ * otherwise on a fatal one. */
 int request_run(struct request *request);
 
 /* Deallocate the given request after de-initializing it

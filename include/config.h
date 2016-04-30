@@ -64,6 +64,8 @@
 
 /* Shell to invoke actions with. */
 #define ACTION_SHELL "/bin/sh"
+/* PATH to invoke actions with */
+#define ACTION_PATH "/bin:/usr/bin"
 
 struct program;
 struct action;
@@ -114,9 +116,10 @@ struct config {
  * act_stop   : (struct action *) The action to stop the program. If not
  *              configured, the "main" process is killed using SIGTERM.
  * act_status : (struct action *) The action to check program status. If not
- *              configured, "running" is printed to stdout while checking
- *              status and 0 is returned if the program is running;
- *              otherwise, "not running" is printed, and 1 is returned. */
+ *              configured, "running" is printed to stdout (with a trailing
+ *              newline) while checking status and 0 is returned if the
+ *              program is running; otherwise, "not running" is printed (with
+ *              a trailing newline as well), and 1 is returned. */
 struct program {
     char *name;
     int pid;
@@ -135,14 +138,14 @@ struct program {
  * The command is run by ACTION_SHELL, appended after a "-c" parameter;
  * additional positional arguments are passed after it. The execution
  * environment is empty, save for the following variables:
- * PATH=/bin:/usr/bin -- The path to get executables from. All other ones
- *                       must be fetched by absolute path.
- * SHELL              -- The shell used to run the command. Equal to the
- *                       ACTION_SHELL constant.
- * PROGNAME           -- The name of the current program.
- * ACTION             -- The name of the action being executed now.
- * PID                -- The PID of the process of the current program, or
- *                       the empty string if none.
+ * PATH     -- The path to get executables from. All other ones must be
+ *             fetched by absolute path. Equal to the ACTION_PATH constant.
+ * SHELL    -- The shell used to run the command. Equal to the ACTION_SHELL
+ *             constant.
+ * PROGNAME -- The name of the current program.
+ * ACTION   -- The name of the action being executed now.
+ * PID      -- The PID of the process of the current program, or the empty
+ *             string if none.
  * The PID of the process that is running the "start" and "restart" actions
  * is recorded as the PID of the program as a whole; thus, the command for
  * these actions should preferably exec() the actual service to be run.
