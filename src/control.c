@@ -179,7 +179,7 @@ int request_run(struct request *request) {
              * a process or not. */
             ret = fork();
             if (ret == 0) {
-                if (! setup_fds(request)) _exit(126);
+                setup_fds(request);
                 if (prog->pid != -1) {
                     printf("running\n");
                     fflush(stdout);
@@ -221,7 +221,7 @@ int request_run(struct request *request) {
         ret = fork();
         if (ret == 0) {
             /* In child: configure file descriptors */
-            if (! setup_fds(request)) _exit(126);
+            setup_fds(request);
             /* exec() script */
             execve(argv[0], argv, envp);
             _exit(127);
