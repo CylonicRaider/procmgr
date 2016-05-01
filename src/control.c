@@ -231,8 +231,12 @@ int request_run(struct request *request) {
     }
     /* Only falling through here if we want to wait on something ->
      * Schedule waiter */
-    if (ret != -1 && request->reply && ! submit_waiter(request, ret))
-        return -1;
+    if (ret != -1 && request->reply) {
+        int stopping = (request->action == prog->action_stop);
+        int waitfor = (stopping) ? prog->pid : ret;
+        if (! submit_waiter(request, waitfor))
+            return -1;
+    }
     return ret;
     /* Someting failed */
     error:
