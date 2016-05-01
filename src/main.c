@@ -1,5 +1,5 @@
 
-/* Main program for configuration parsing testing */
+/* Main program for testing */
 
 #define _GNU_SOURCE
 #include <errno.h>

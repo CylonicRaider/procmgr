@@ -2,6 +2,7 @@
  * https://github.com/CylonicRaider/procmgr */
 
 #define _GNU_SOURCE
+#include <dirent.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -20,6 +21,7 @@ struct waiter {
 static char *action_names[] = { "start", "restart", "reload", "signal",
     "stop", "status" };
 #define action_count (sizeof(action_names) / sizeof(*action_names))
+static int setup_fds(struct request *request);
 static int request_senderr(struct request *request, char *code, char *desc);
 static int request_reply(int fd, struct addr *addr, int code);
 static struct job *submit_waiter(struct request *request, int pid);
@@ -177,6 +179,7 @@ int request_run(struct request *request) {
              * a process or not. */
             ret = fork();
             if (ret == 0) {
+                if (! setup_fds(request)) _exit(126);
                 if (prog->pid != -1) {
                     printf("running\n");
                     fflush(stdout);
@@ -217,7 +220,9 @@ int request_run(struct request *request) {
         /* Spawn child process */
         ret = fork();
         if (ret == 0) {
-            /* In child: exec() script */
+            /* In child: configure file descriptors */
+            if (! setup_fds(request)) _exit(126);
+            /* exec() script */
             execve(argv[0], argv, envp);
             _exit(127);
         }
@@ -351,6 +356,45 @@ int get_reply(struct config *config) {
         errno = 0;
     end:
         comm_del(&msg);
+        return ret;
+}
+
+/* Set up file descriptors for running as a child */
+int setup_fds(struct request *request) {
+    int i, dfd, fd, ret = -1;
+    DIR *dir;
+    char path[PATH_MAX], *end;
+    /* Override stdio with those in the request */
+    if (request->fds[0] != -1 && dup2(request->fds[0], 0) == -1) return -1;
+    if (request->fds[1] != -1 && dup2(request->fds[1], 1) == -1) return -1;
+    if (request->fds[2] != -1 && dup2(request->fds[2], 2) == -1) return -1;
+    if (request->fds[0] == -1) close(0);
+    if (request->fds[1] == -1) close(1);
+    if (request->fds[2] == -1) close(2);
+    /* Close all below 1024 */
+    for (i = 3; i < 1024; i++) close(i);
+    /* Detect remaining FD-s from /proc */
+    snprintf(path, sizeof(path), "/proc/%d/fd/", getpid());
+    dir = opendir(path);
+    if (! dir) return -1;
+    dfd = dirfd(dir);
+    for (;;) {
+        struct dirent *ent;
+        errno = 0;
+        ent = readdir(dir);
+        if (! ent && errno) goto end;
+        errno = 0;
+        fd = strtol(ent->d_name, &end, 10);
+        if (*end || errno) {
+            errno = EINVAL;
+            goto end;
+        }
+        if (fd < 3 || fd == dfd) continue;
+        close(fd);
+    }
+    ret = 0;
+    end:
+        closedir(dir);
         return ret;
 }
 
