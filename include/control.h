@@ -27,7 +27,9 @@
  *          be NULL.
  * creds  : (struct ucred) Credentials of the process to submit the request.
  * fds    : (int [3]) A set of file descriptors to pass to the script.
- * addr   : (struct addr) The address to send replies to. */
+ * addr   : (struct addr) The address to send replies to.
+ * reply  : (int) Whether this request should be replied to. Mostly for
+ *          internal use; defaults to 1. */
 struct request {
     struct config *config;
     struct program *program;
@@ -36,6 +38,7 @@ struct request {
     struct ucred creds;
     int fds[3];
     struct addr addr;
+    int reply;
 };
 
 /* Create a request from the given message
@@ -71,9 +74,9 @@ void request_free(struct request *request);
 
 /* Extract jobs matching the given PID from the queue and spawn them
  * pid may be -1, in that case jobs which do not wait on a particular PID
- * are run.
+ * are run. retcode is passed through to the job_run().
  * Returns the amount of jobs run in case of success, or -1 on error. */
-int run_jobs(struct config *config, int pid);
+int run_jobs(struct config *config, int pid, int retcode);
 
 /* Send a request to perform an action as specified in the argument list
  * argv is expected to contain the actual "arguments" (i.e., such not

@@ -12,11 +12,17 @@
 #ifndef _JOBS_H
 #define _JOBS_H
 
+/* Not caused by process exit */
+#define JOB_NOEXIT 65535
+
 /* Callback type for jobs
- * The argument is passed through from the job structure. The callback is
- * expected to return the PID of the process spawned, 0 when no process was
- * spawned, or -1 on error (with errno set). */
-typedef int job_func_t(void *);
+ * The first argument is passed through from the data member of the job
+ * structure. The integer argument is the exit code of the process that
+ * caused the callback to be invoked, or the JOB_NOEXIT constant if the
+ * execution was caused by other means. The callback is expected to return
+ * the PID of a process spawned, 0 when no process was spawned, or -1 on
+ * error (with errno set). */
+typedef int job_func_t(void *, int);
 
 /* Destructor for auxillary job data
  * The function is called when the job is destroyed. The pointer is the
@@ -79,9 +85,11 @@ void job_del(struct job *job);
 void job_free(struct job *job);
 
 /* Actually run the callback associated with the job
+ * retcode is passed through to the callback; use JOB_NOEXIT if you have no
+ * meaningful value to specify.
  * The return value is the same as the one of the callback (in particular,
  * -1 on error), or zero if no callback is configured. */
-int job_run(struct job *job);
+int job_run(struct job *job, int retcode);
 
 /* Prepend a job to the queue */
 void jobqueue_prepend(struct jobqueue *queue, struct job *job);

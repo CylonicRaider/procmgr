@@ -70,12 +70,10 @@ void job_free(struct job *job) {
     free(job);
 }
 
-/* Actually run the callback associated with the job
- * The return value is the same as the one of the callback (in particular,
- * -1 on error), or zero if no callback is configured. */
-int job_run(struct job *job) {
+/* Actually run the callback associated with the job */
+int job_run(struct job *job, int retcode) {
     if (! job->callback) return 0;
-    return job->callback(job->data);
+    return job->callback(job->data, retcode);
 }
 
 /* Prepend a job to the queue */

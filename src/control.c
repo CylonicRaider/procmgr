@@ -1,8 +1,6 @@
 /* procmgr -- init-like process manager
  * https://github.com/CylonicRaider/procmgr */
 
-/* TODO: Reply something */
-
 #define _GNU_SOURCE
 #include <errno.h>
 #include <signal.h>
@@ -13,12 +11,21 @@
 #include "control.h"
 
 /* Static definitions */
+struct waiter {
+    int fd;
+    int pid;
+    struct addr replyto;
+};
+
 static char *action_names[] = { "start", "restart", "reload", "signal",
     "stop", "status" };
 #define action_count (sizeof(action_names) / sizeof(*action_names))
 static int request_senderr(struct request *request, char *code, char *desc);
+static int request_reply(int fd, struct addr *addr, int code);
+static struct job *submit_waiter(struct request *request, int pid);
 static struct job *submit_job(struct request *request);
-static int _run_request(void *data);
+static int _run_waiter(void *data, int retcode);
+static int _run_request(void *data, int retcode);
 static void _free_request(void *data);
 static char *concat(char *s1, char *s2);
 
@@ -74,6 +81,7 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
     ret->fds[1] = msg->fds[1];
     ret->fds[2] = msg->fds[2];
     ret->addr = *addr;
+    ret->reply = 1;
     /* Done */
     return ret;
     /* Error handling */
@@ -108,6 +116,7 @@ int request_run(struct request *request) {
     struct program *prog = request->program;
     struct request *req = NULL;
     struct job *job;
+    int ret = 0;
     /* Update flags */
     if (request->action == prog->act_start ||
             request->action == prog->act_restart) {
@@ -139,6 +148,7 @@ int request_run(struct request *request) {
             /* "exec" different action using this request */
             request->action = prog->act_stop;
             request->argv = NULL;
+            request->reply = 0;
             res = request_run(request);
             if (res == -1) goto error;
             /* Dispatch follow-up action */
@@ -152,9 +162,12 @@ int request_run(struct request *request) {
             return request_run(request);
         } else if (request->action == prog->act_signal) {
             /* Do nothing */
-            return 0;
+            if (! request->reply) return 0;
+            return (request_reply(request->config->socket, &request->addr,
+                                  0)) ? 0 : -1;
         } else if (request->action == prog->act_stop) {
-            /* Kill process, if any */
+            /* Kill process, if any
+             * Reply will be sent when it dies */
             if (prog->pid != -1) {
                 return (kill(prog->pid, SIGTERM) == -1) ? -1 : 0;
             }
@@ -162,8 +175,8 @@ int request_run(struct request *request) {
         } else if (request->action == prog->act_status) {
             /* Write "running" or "not running" depending on whether there is
              * a process or not. */
-            int pid = fork();
-            if (pid == 0) {
+            ret = fork();
+            if (ret == 0) {
                 if (prog->pid != -1) {
                     printf("running\n");
                     fflush(stdout);
@@ -174,7 +187,6 @@ int request_run(struct request *request) {
                     _exit(1);
                 }
             }
-            return pid;
         } else {
             /* Should not happen at this point */
             errno = EFAULT;
@@ -182,7 +194,6 @@ int request_run(struct request *request) {
         }
     } else {
         char **p, **argv, *envp[5], pidbuf[64];
-        int pid;
         /* Prepare for job spawning */
         int l = 3;
         for (p = request->argv; *p; p++) l++;
@@ -200,21 +211,24 @@ int request_run(struct request *request) {
         if (prog->pid == -1) {
             envp[4] = "PID=";
         } else {
-            sprintf(pidbuf, "PID=%d", prog->pid);
+            snprintf(pidbuf, sizeof(pidbuf), "PID=%d", prog->pid);
             envp[4] = pidbuf;
         }
         /* Spawn child process */
-        pid = fork();
-        if (pid == 0) {
+        ret = fork();
+        if (ret == 0) {
             /* In child: exec() script */
             execve(argv[0], argv, envp);
             _exit(127);
         }
         /* Clean up */
         for (l = 0; l < 4; l++) free(envp[l]);
-        /* Done */
-        return pid;
     }
+    /* Only falling through here if we want to wait on something ->
+     * Schedule waiter */
+    if (ret != -1 && request->reply && ! submit_waiter(request, ret))
+        return -1;
+    return ret;
     /* Someting failed */
     error:
         if (req) request_free(req);
@@ -235,12 +249,12 @@ void request_free(struct request *request) {
 }
 
 /* Extract jobs matching the given PID from the queue and run them */
-int run_jobs(struct config *config, int pid) {
+int run_jobs(struct config *config, int pid, int retcode) {
     struct job *list, *next;
     int res, ret = 0;
     for (list = jobqueue_getfor(config->jobs, pid); list; list = next) {
         next = list->next;
-        res = job_run(list);
+        res = job_run(list, retcode);
         if (res == -1) {
             job_free(list);
             return -1;
@@ -347,6 +361,16 @@ int request_senderr(struct request *request, char *code, char *desc) {
                          &request->addr) != -1);
 }
 
+/* Send a successful completion message */
+int request_reply(int fd, struct addr *addr, int code) {
+    char numbuf[64], *fields[] = { "OK", numbuf };
+    struct ctlmsg msg = CTLMSG_INIT;
+    snprintf(numbuf, sizeof(numbuf), "%d", code);
+    msg.fields = fields;
+    msg.fieldnum = sizeof(fields) / sizeof(*fields);
+    return (comm_send(fd, &msg, addr) != -1);
+}
+
 /* Schedule a job wrapping this request to be run */
 struct job *submit_job(struct request *request) {
     struct job *ret = job_new(_run_request, _free_request, request);
@@ -355,8 +379,37 @@ struct job *submit_job(struct request *request) {
     return ret;
 }
 
+/* Schedule a job wrapping this request to be run */
+struct job *submit_waiter(struct request *request, int pid) {
+    struct waiter *wt;
+    struct job *ret;
+    wt = malloc(sizeof(struct waiter));
+    if (! wt) return NULL;
+    wt->fd = request->config->socket;
+    wt->pid = pid;
+    wt->replyto = request->addr;
+    ret = job_new(_run_waiter, free, wt);
+    if (! ret) {
+        free(wt);
+        return NULL;
+    }
+    ret->waitfor = pid;
+    jobqueue_append(request->config->jobs, ret);
+    return ret;
+}
+
+/* Notify the process blocking on this waiter */
+int _run_waiter(void *data, int retcode) {
+    struct waiter *wt = data;
+    if (retcode == JOB_NOEXIT) {
+        errno = EINVAL;
+        return -1;
+    }
+    return (request_reply(wt->fd, &wt->replyto, retcode)) ? 0 : -1;
+}
+
 /* Execute the payload of the given request */
-int _run_request(void *data) {
+int _run_request(void *data, int retcode) {
     return request_run(data);
 }
 
