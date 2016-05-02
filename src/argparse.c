@@ -1,6 +1,10 @@
 /* procmgr -- init-like process manager
  * https://github.com/CylonicRaider/procmgr */
 
+#include <string.h>
+
+#include "argparse.h"
+
 /* Prepare for argument parsing */
 void arginit(struct opt *opt, char *argv[]) {
     memset(opt, 0, sizeof(*opt));
