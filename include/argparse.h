@@ -6,8 +6,14 @@
  * option characters, and getarg() to read arguments (for options or
  * non-options) or long option names (and arguments). See argparse() for
  * details.
+ * Arbitrary single-character options are supported, as well as
+ * multi-character options; arguments consisting of a single hyphen and
  * The struct opt may be freely disposed of (as long as it isn't used
- * after that). */
+ * and the double-hyphen argument separator are supported as well.
+ * after that).
+ * According to the UNIX philosophy of "doing one thing, but that well",
+ * this concentrates on command-line parsing exclusively; it is the
+ * caller's burden to check for invalid options. */
 
 #ifndef _ARGPARSE_H
 #define _ARGPARSE_H
@@ -26,7 +32,8 @@ struct opt {
 };
 
 /* Prepare for argument parsing
- * Since argv is NULL-terminated, an argc is not required. */
+ * Since argv is NULL-terminated, an argc is not required; the program
+ * name must be included. */
 void arginit(struct opt *opt, char *argv[]);
 
 /* Parse arguments
