@@ -94,4 +94,7 @@ int send_request(struct config *config, char **argv);
  * written to standard error. */
 int get_reply(struct config *config);
 
+/* Close all file descriptors not less than minfd */
+int close_from(int minfd);
+
 #endif

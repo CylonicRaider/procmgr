@@ -363,20 +363,12 @@ int get_reply(struct config *config) {
         return ret;
 }
 
-/* Set up file descriptors for running as a child */
-int setup_fds(struct request *request) {
+int close_from(int minfd) {
     int i, dfd, fd, ret = -1;
     DIR *dir;
     char path[PATH_MAX], *end;
-    /* Override stdio with those in the request */
-    if (request->fds[0] != -1 && dup2(request->fds[0], 0) == -1) return -1;
-    if (request->fds[1] != -1 && dup2(request->fds[1], 1) == -1) return -1;
-    if (request->fds[2] != -1 && dup2(request->fds[2], 2) == -1) return -1;
-    if (request->fds[0] == -1) close(0);
-    if (request->fds[1] == -1) close(1);
-    if (request->fds[2] == -1) close(2);
     /* Close all below 1024 */
-    for (i = 3; i < 1024; i++) close(i);
+    for (i = minfd; i < 1024; i++) close(i);
     /* Detect remaining FD-s from /proc */
     snprintf(path, sizeof(path), "/proc/%d/fd/", getpid());
     dir = opendir(path);
@@ -393,13 +385,25 @@ int setup_fds(struct request *request) {
             errno = EINVAL;
             goto end;
         }
-        if (fd < 3 || fd == dfd) continue;
+        if (fd < minfd || fd == dfd) continue;
         close(fd);
     }
     ret = 0;
     end:
         closedir(dir);
         return ret;
+}
+
+/* Set up file descriptors for running as a child */
+int setup_fds(struct request *request) {
+    /* Override stdio with those in the request */
+    if (request->fds[0] != -1 && dup2(request->fds[0], 0) == -1) return -1;
+    if (request->fds[1] != -1 && dup2(request->fds[1], 1) == -1) return -1;
+    if (request->fds[2] != -1 && dup2(request->fds[2], 2) == -1) return -1;
+    if (request->fds[0] == -1) close(0);
+    if (request->fds[1] == -1) close(1);
+    if (request->fds[2] == -1) close(2);
+    close_from(3);
 }
 
 /* Send an error message to the client as specified by the given request,
