@@ -16,7 +16,7 @@
 #define DEFAULT_CONFFILE "/etc/procmgr.cfg"
 
 /* Action the main() routing can perform */
-enum action { SPAWN, TEST, STOP, RELOAD };
+enum cmdaction { SPAWN, TEST, STOP, RELOAD };
 
 /* Server main loop
  * background specifies whether to fork into background. argv is verified not
@@ -28,6 +28,6 @@ int server_main(struct config *config, int background, char *argv[]);
  * action is the action to perform, argv is an array of command-line
  * arguments to pass.
  * Returns 0 on success, or a positive integer on failure. */
-int client_main(struct config *config, enum action action, char *argv[]);
+int client_main(struct config *config, enum cmdaction action, char *argv[]);
 
 #endif

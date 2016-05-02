@@ -20,7 +20,7 @@ const char *HELP =
     "-h: (--help) This help\n"
     "-V: (--version) Print version (" VERSION ")\n"
     "-c: (--config) Configuration file location (defaults to environment\n"
-    "    variable PROCMGR_CONFFILE, or to " DEFAULT_CONFFILE " if not "
+    "    variable PROCMGR_CONFFILE, or to " DEFAULT_CONFFILE " if not\n"
     "    set)\n"
     "-d: (--daemon) Start daemon (as opposed to the default \"client\"\n"
     "    mode)\n"
@@ -38,7 +38,7 @@ struct config *create_config(char *filename) {
     if (! fp) return NULL;
     conffile = conffile_new(fp);
     if (! conffile) goto ferror;
-    config = config_new(conffile);
+    config = config_new(conffile, 0);
     if (! config) goto cnferror;
     return config;
     ferror:
@@ -65,38 +65,52 @@ void usage(int help, int retcode) {
 
 /* Server main loop */
 int server_main(struct config *config, int background, char *argv[]) {
+    /* TODO */
     fprintf(stderr, "NYI\n");
-    return 1;
+    return 3;
 }
 
 /* Client main function */
-int client_main(struct config *config, enum action action, char *argv[]) {
-    char *cmd, **data;
+int client_main(struct config *config, enum cmdaction action, char *argv[]) {
+    char *cmd, *param, **data, *buf[3];
     int res, l;
     /* Determine which command to send */
     switch (action) {
-        case SPAWN : cmd = "RUN";      break;
-        case RELOAD: cmd = "RELOAD";   break;
-        case TEST  : cmd = "PING";     break;
-        case STOP  : cmd = "SHUTDOWN"; break;
+        case SPAWN : cmd = "RUN"   ; param = NULL;       break;
+        case RELOAD: cmd = "SIGNAL"; param = "reload";   break;
+        case TEST  : cmd = "PING"  ; param = NULL;       break;
+        case STOP  : cmd = "SIGNAL"; param = "shutdown"; break;
         default:
             fprintf(stderr, "Internal error\n");
             return 1;
     }
     /* Prepend command to arguments */
-    l = 2;
-    for (data = argv; data && *data; data++) l++;
-    data = calloc(l, sizeof(char *));
-    if (! data) {
-        perror("Failed to allocate memory");
+    if (action == SPAWN) {
+        l = 2;
+        for (data = argv; data && *data; data++) l++;
+        data = calloc(l, sizeof(char *));
+        if (! data) {
+            perror("Failed to allocate memory");
+            return 1;
+        }
+        data[0] = cmd;
+        if (argv) memcpy(data + 1, argv, l * sizeof(char *));
+    } else {
+        data = buf;
+        data[0] = cmd;
+        data[1] = param;
+        data[2] = NULL;
+    }
+    /* Connect */
+    if (comm_connect(config) == -1) {
+        perror("Could not connect");
         return 1;
     }
-    data[0] = cmd;
-    memcpy(data + 1, argv, l * sizeof(char *));
     /* Send command */
     res = send_request(config, data);
+    if (action == SPAWN) free(data);
     if (res == 0) {
-        fprintf(stderr, "Invalid arguments");
+        fprintf(stderr, "Invalid arguments\n");
         return 2;
     } else if (res == -1) {
         perror("Error while sending command");
@@ -113,9 +127,9 @@ int client_main(struct config *config, enum action action, char *argv[]) {
 
 /* Main function */
 int main(int argc, char *argv[]) {
-    int server = 0, background = -1;
+    int server = 0, background = -1, ret;
     char *conffile = NULL, **args = NULL;
-    enum action action;
+    enum cmdaction action = SPAWN;
     struct opt opts;
     struct config *config;
     /* Parse arguments */
@@ -123,21 +137,21 @@ int main(int argc, char *argv[]) {
     for (;;) {
         int opt = argparse(&opts);
         if (opt == 0) {
-            args = opts->argv + opts->curidx;
+            args = opts.argv + opts.curidx;
             break;
-        if (opt == -1) {
+        } else if (opt == -1) {
             die("Internal error");
         } else if (opt == -2) {
             break;
         } else if (opt == -3) {
-            char *arg = getarg(&opts);
+            char *arg = getarg(&opts, 0);
             if (strcmp(arg, "help") == 0) {
                 usage(1, 0);
             } else if (strcmp(arg, "version") == 0) {
                 puts(PROGNAME " " VERSION);
                 return 0;
             } else if (strcmp(arg, "config") == 0) {
-                conffile = getarg(&opts);
+                conffile = getarg(&opts, 0);
                 if (! conffile) {
                     fprintf(stderr, "Missing required argument for '%s'\n",
                             arg);
@@ -159,7 +173,7 @@ int main(int argc, char *argv[]) {
             }
             continue;
         } else if (opt == -4) {
-            char *arg = getarg(&opts);
+            char *arg = getarg(&opts, 0);
             char *eq = strchr(arg, '=');
             *eq++ = '\0';
             if (strcmp(arg, "config") == 0) {
@@ -177,10 +191,10 @@ int main(int argc, char *argv[]) {
                 puts(PROGNAME " " VERSION);
                 return 0;
             case 'c':
-                conffile = getarg(&opts);
+                conffile = getarg(&opts, 0);
                 if (! conffile) {
-                    fprintf(stderr, "Missing required argument for '%s'\n",
-                            arg);
+                    fprintf(stderr, "Missing required argument for '-%c'\n",
+                            opt);
                     usage(0, 2);
                 }
                 break;
@@ -224,8 +238,12 @@ int main(int argc, char *argv[]) {
     if (! config) die("Failed to load configuration");
     /* Main... branch */
     if (server) {
-        return server_main(config, background, args);
+        ret = server_main(config, background, args);
     } else {
-        return client_main(config, action, args);
+        ret = client_main(config, action, args);
     }
+    /* Clean up */
+    config_free(config);
+    /* Done */
+    return ret;
 }

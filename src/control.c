@@ -198,11 +198,11 @@ int request_run(struct request *request) {
     } else {
         char **p, **argv, *envp[5], pidbuf[64];
         /* Prepare for job spawning */
-        int l = 3;
+        int l = 4;
         for (p = request->argv; *p; p++) l++;
         argv = calloc(l, sizeof(char *));
         if (! argv) return -1;
-        memcpy(argv + 3, request->argv, (l - 3) * sizeof(char *));
+        memcpy(argv + 3, request->argv, (l - 4) * sizeof(char *));
         argv[0] = ACTION_SHELL;
         argv[1] = "-c";
         argv[2] = request->action->command;
@@ -293,20 +293,31 @@ int send_request(struct config *config, char **argv) {
     int i, ret;
     char **p;
     /* Calculate field amount */
-    msg.fieldnum = 1;
+    msg.fieldnum = 0;
     for (p = argv; *p; p++) msg.fieldnum++;
     /* Validate request */
-    if (msg.fieldnum < 3) return 0;
-    for (i = 0; i < action_count; i++) {
-        if (strcmp(argv[1], action_names[i]) == 0) break;
+    if (msg.fieldnum == 0) {
+        return 0;
+    } else if (strcmp(argv[0], "RUN") == 0) {
+        if (msg.fieldnum < 3) return 0;
+        for (i = 0; i < action_count; i++) {
+            if (strcmp(argv[2], action_names[i]) == 0) break;
+        }
+        if (i == action_count) return 0;
+    } else if (strcmp(argv[0], "SIGNAL") == 0) {
+        if (msg.fieldnum != 2) return 0;
+        if (strcmp(argv[1], "reload") != 0 &&
+            strcmp(argv[1], "shutdown") != 0) return 0;
+    } else if (strcmp(argv[0], "PING") == 0) {
+        if (msg.fieldnum > 2) return 0;
+    } else {
+        return 0;
     }
-    if (i == action_count) return 0;
     /* Allocate data */
     msg.fields = calloc(msg.fieldnum, sizeof(char *));
     if (! msg.fields) return -1;
-    msg.fields[0] = "RUN";
-    for (i = 1; i < msg.fieldnum; i++) {
-        msg.fields[i] = argv[i - 1];
+    for (i = 0; i < msg.fieldnum; i++) {
+        msg.fields[i] = argv[i];
     }
     /* Fill in fields */
     msg.fds[0] = STDIN_FILENO;
@@ -408,7 +419,7 @@ int setup_fds(struct request *request) {
     if (request->fds[0] == -1) close(0);
     if (request->fds[1] == -1) close(1);
     if (request->fds[2] == -1) close(2);
-    close_from(3);
+    return close_from(3);
 }
 
 /* Send an error message to the client as specified by the given request,
