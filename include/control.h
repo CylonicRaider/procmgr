@@ -79,11 +79,11 @@ void request_free(struct request *request);
 int run_jobs(struct config *config, int pid, int retcode);
 
 /* Send a request to perform an action as specified in the argument list
- * argv is expected to contain the actual "arguments" (i.e., such not
- * containing the program name) as a NULL-terminated array.
+ * argv is expected to contain the actual values to send, consisting of a
+ * protocol-level command and of its parameters.
  * Invalid actions are filtered out. Returns a positive number on success,
- * zero if the argument list is invalid (most notably by being too small or
- * by containing an invalid action), or -1 on fatal error. */
+ * zero if the argument list is invalid (most notably by being too short,
+ * too long, or by containing an invalid action), or -1 on fatal error. */
 int send_request(struct config *config, char **argv);
 
 /* Wait for a message to arrive and return the desired return code

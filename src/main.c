@@ -1,140 +1,231 @@
+/* procmgr -- init-like process manager
+ * https://github.com/CylonicRaider/procmgr */
 
-/* Main program for testing */
+/* Main program */
 
 #define _GNU_SOURCE
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "readline.h"
-#include "comm.h"
+#include "argparse.h"
+#include "control.h"
+#include "main.h"
+#include "util.h"
 
+/* Usage and help */
+const char *USAGE = "USAGE: " PROGNAME " [-h|-V] [-c conffile] [-d "
+    "[-f]|-t|-s|-r]\n";
+const char *HELP =
+    "-h: (--help) This help\n"
+    "-V: (--version) Print version (" VERSION ")\n"
+    "-c: (--config) Configuration file location (defaults to environment\n"
+    "    variable PROCMGR_CONFFILE, or to " DEFAULT_CONFFILE " if not "
+    "    set)\n"
+    "-d: (--daemon) Start daemon (as opposed to the default \"client\"\n"
+    "    mode)\n"
+    "-f: (--foreground) Stay in foreground (daemon mode only)\n"
+    "-t: (--test) Check whether the daemon is running\n"
+    "-s: (--stop) Signal the daemon (if any running) to stop\n"
+    "-r: (--reload) Signal the daemon (if any running) to reload its\n"
+    "    configuration\n";
+
+/* Allocate a configuration given a filename */
+struct config *create_config(char *filename) {
+    struct config *config;
+    struct conffile *conffile;
+    FILE *fp = fopen(filename, "r");
+    if (! fp) return NULL;
+    conffile = conffile_new(fp);
+    if (! conffile) goto ferror;
+    config = config_new(conffile);
+    if (! config) goto cnferror;
+    return config;
+    ferror:
+        fclose(fp);
+        return NULL;
+    cnferror:
+        conffile_free(conffile);
+        return NULL;
+}
+
+/* Abort program execution with the given error message along with
+ * strerror(errno) */
 void die(char *func) {
     perror(func);
     exit(1);
 }
 
-void print_msg(FILE *fp, struct ctlmsg *msg) {
-    int i;
-    char *p;
-    fputs("[msg [", fp);
-    for (i = 0; i < msg->fieldnum; i++) {
-        if (i) fputs(", ", fp);
-        fputc('"', fp);
-        for (p = msg->fields[i]; *p; p++) {
-            if (*p == '\n') {
-                fputs("\\n", fp);
-                continue;
-            }
-            if (*p == '"' || *p == '\\') fputc('\\', fp);
-            fputc(*p, fp);
-        }
-        fputc('"', fp);
-    }
-    fprintf(fp, "] {pid=%d uid=%d gid=%d} {in=%d out=%d err=%d}]\n",
-            msg->creds.pid, msg->creds.uid, msg->creds.gid,
-            msg->fds[0], msg->fds[1], msg->fds[2]);
+/* Write a usage message */
+void usage(int help, int retcode) {
+    fputs(USAGE, stderr);
+    if (help) fputs(HELP, stderr);
+    exit(retcode);
 }
 
-int main(int argc, char *argv[]) {
-    FILE *fp;
-    int fd, listen;
-    struct conffile *conffile;
-    struct config *config;
-    struct ctlmsg msg = CTLMSG_INIT;
-    struct addr addr;
-    /* "Parse" command line */
-    if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[2], "-l") != 0)) {
-        fprintf(stderr, "USAGE: %s filename [-l]\n", argv[0]);
+/* Server main loop */
+int server_main(struct config *config, int background, char *argv[]) {
+    fprintf(stderr, "NYI\n");
+    return 1;
+}
+
+/* Client main function */
+int client_main(struct config *config, enum action action, char *argv[]) {
+    char *cmd, **data;
+    int res, l;
+    /* Determine which command to send */
+    switch (action) {
+        case SPAWN : cmd = "RUN";      break;
+        case RELOAD: cmd = "RELOAD";   break;
+        case TEST  : cmd = "PING";     break;
+        case STOP  : cmd = "SHUTDOWN"; break;
+        default:
+            fprintf(stderr, "Internal error\n");
+            return 1;
+    }
+    /* Prepend command to arguments */
+    l = 2;
+    for (data = argv; data && *data; data++) l++;
+    data = calloc(l, sizeof(char *));
+    if (! data) {
+        perror("Failed to allocate memory");
         return 1;
     }
-    listen = (argc == 3);
-    /* Open file */
-    fp = fopen(argv[1], "r");
-    if (! fp) die("fopen");
-    /* Create conffile */
-    conffile = conffile_new(fp);
-    if (! conffile) die("conffile_new");
-    /* Create config */
-    config = config_new(conffile, 0);
-    if (! config) die("config_new");
-    /* Create socket */
-    if (listen) {
-        fd = comm_listen(config);
-        if (fd == -1) die("comm_listen");
-    } else {
-        fd = comm_connect(config);
-        if (fd == -1) die("comm_connect");
+    data[0] = cmd;
+    memcpy(data + 1, argv, l * sizeof(char *));
+    /* Send command */
+    res = send_request(config, data);
+    if (res == 0) {
+        fprintf(stderr, "Invalid arguments");
+        return 2;
+    } else if (res == -1) {
+        perror("Error while sending command");
+        return 1;
     }
-    /* Main loop */
-    if (listen) {
-        for (;;) {
-            int res = comm_recv(fd, &msg, &addr);
-            if (res == -1) {
-                die("comm_recv");
-            } else if (res == -2) {
-                continue;
+    /* Obtain reply */
+    res = get_reply(config);
+    if (res == REPLY_ERROR) {
+        perror("Error while receiving reply");
+        return 1;
+    }
+    return res;
+}
+
+/* Main function */
+int main(int argc, char *argv[]) {
+    int server = 0, background = -1;
+    char *conffile = NULL, **args = NULL;
+    enum action action;
+    struct opt opts;
+    struct config *config;
+    /* Parse arguments */
+    arginit(&opts, argv);
+    for (;;) {
+        int opt = argparse(&opts);
+        if (opt == 0) {
+            args = opts->argv + opts->curidx;
+            break;
+        if (opt == -1) {
+            die("Internal error");
+        } else if (opt == -2) {
+            break;
+        } else if (opt == -3) {
+            char *arg = getarg(&opts);
+            if (strcmp(arg, "help") == 0) {
+                usage(1, 0);
+            } else if (strcmp(arg, "version") == 0) {
+                puts(PROGNAME " " VERSION);
+                return 0;
+            } else if (strcmp(arg, "config") == 0) {
+                conffile = getarg(&opts);
+                if (! conffile) {
+                    fprintf(stderr, "Missing required argument for '%s'\n",
+                            arg);
+                    usage(0, 2);
+                }
+            } else if (strcmp(arg, "daemon") == 0) {
+                server = 1;
+            } else if (strcmp(arg, "foreground") == 0) {
+                background = 0;
+            } else if (strcmp(arg, "test") == 0) {
+                action = TEST;
+            } else if (strcmp(arg, "stop") == 0) {
+                action = STOP;
+            } else if (strcmp(arg, "reload") == 0) {
+                action = RELOAD;
+            } else {
+                fprintf(stderr, "Unknown option: '--%s'\n", arg);
+                return 1;
             }
-            print_msg(stdout, &msg);
-            if (comm_send(fd, &msg, &addr) == -1)
-                die("comm_send");
+            continue;
+        } else if (opt == -4) {
+            char *arg = getarg(&opts);
+            char *eq = strchr(arg, '=');
+            *eq++ = '\0';
+            if (strcmp(arg, "config") == 0) {
+                conffile = eq;
+            } else {
+                fprintf(stderr, "Unknown option: '--%s'\n", arg);
+                usage(0, 2);
+            }
+            continue;
         }
-        comm_del(&msg);
-    } else {
-        struct ctlmsg msg2 = CTLMSG_INIT;
-        char *buffer = NULL, **parts = NULL, *p;
-        size_t buflen = 0;
-        int nparts, i;
-        msg.fds[0] = 0;
-        msg.fds[1] = 1;
-        msg.fds[2] = 2;
-        for (;;) {
-            /* Read line */
-            int res = readline(stdin, &buffer, &buflen);
-            if (res == -1) die("readline");
-            if (res == 0) break;
-            if (strlen(buffer) != res) {
-                fprintf(stderr, "Embedded NUL found, aborting.\n");
+        switch (opt) {
+            case 'h':
+                usage(1, 0);
+            case 'V':
+                puts(PROGNAME " " VERSION);
+                return 0;
+            case 'c':
+                conffile = getarg(&opts);
+                if (! conffile) {
+                    fprintf(stderr, "Missing required argument for '%s'\n",
+                            arg);
+                    usage(0, 2);
+                }
                 break;
-            }
-            /* Strip newline */
-            if (buffer[res - 1] == '\n')
-                buffer[--res] = '\0';
-            /* Allocate parts */
-            nparts = 1;
-            for (i = 0; i < res; i++) {
-                if (buffer[i] != '\t') continue;
-                nparts++;
-                buffer[i] = '\0';
-            }
-            parts = realloc(parts, nparts * sizeof(char *));
-            if (! parts) die("realloc");
-            /* Split into those */
-            p = buffer;
-            for (i = 0; i < nparts; i++) {
-                parts[i] = p;
-                p += strlen(p) + 1;
-            }
-            /* Prepare message */
-            msg.fieldnum = nparts;
-            msg.fields = parts;
-            /* Send message */
-            if (comm_send(fd, &msg, NULL) == -1)
-                die("comm_send");
-            /* Receive reply */
-            if (comm_recv(fd, &msg2, NULL) < 0)
-                die("comm_recv");
-            print_msg(stdout, &msg2);
+            case 'd':
+                server = 1;
+                break;
+            case 'f':
+                background = 0;
+                break;
+            case 't':
+                action = TEST;
+                break;
+            case 's':
+                action = STOP;
+                break;
+            case 'r':
+                action = RELOAD;
+                break;
+            default:
+                fprintf(stderr, "Unknown option: '-%c'\n", opt);
+                usage(0, 2);
         }
-        free(buffer);
-        msg.fieldnum = 0;
-        msg.fields = NULL;
-        memset(msg.fds, 0, sizeof(msg.fds));
-        comm_del(&msg);
-        comm_del(&msg2);
     }
-    /* Delete config */
-    config_free(config);
-    /* Done */
-    return 0;
+    /* Finish options; validate them */
+    if (background == -1) background = server;
+    if (server && action != SPAWN) {
+        fprintf(stderr, "Both daemon mode and an action specified\n");
+        return 2;
+    }
+    /* Fill in configuration file */
+    if (! conffile) {
+        conffile = getenv("PROCMGR_CONFFILE");
+        if (conffile) {
+            conffile = strdup(conffile);
+            if (! conffile) die("Could not allocate string");
+        }
+    }
+    if (! conffile) conffile = DEFAULT_CONFFILE;
+    /* Create configuration */
+    config = create_config(conffile);
+    if (! config) die("Failed to load configuration");
+    /* Main... branch */
+    if (server) {
+        return server_main(config, background, args);
+    } else {
+        return client_main(config, action, args);
+    }
 }

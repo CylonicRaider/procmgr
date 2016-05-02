@@ -9,4 +9,7 @@
 /* The current UNIX timestamp as a double-precision floating-point value */
 double timestamp(void);
 
+/* Fork into background */
+int daemonize(void);
+
 #endif
