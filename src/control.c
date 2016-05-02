@@ -229,6 +229,11 @@ int request_run(struct request *request) {
         /* Clean up */
         for (l = 0; l < 4; l++) free(envp[l]);
     }
+    /* Reply to starts immediately */
+    if (request->action == prog->act_start) {
+        return (request_reply(request->config->socket, &request->addr,
+                              0)) ? 0 : -1;
+    }
     /* Only falling through here if we want to wait on something ->
      * Schedule waiter */
     if (ret != -1 && request->reply) {
