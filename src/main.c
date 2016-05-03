@@ -6,7 +6,9 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <stdio.h>
+#include <signal.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "argparse.h"
 #include "control.h"
@@ -29,6 +31,9 @@ const char *HELP =
     "-s: (--stop) Signal the daemon (if any running) to stop\n"
     "-r: (--reload) Signal the daemon (if any running) to reload its\n"
     "    configuration\n";
+
+/* Global data for signal handlers */
+static int sigpipe[2];
 
 /* Allocate a configuration given a filename */
 struct config *create_config(char *filename) {
@@ -63,10 +68,44 @@ void usage(int help, int retcode) {
     exit(retcode);
 }
 
+/* Signal handler */
+static void notifier(int signum) {
+    unsigned char sn = signum;
+    write(sigpipe[1], &sn, 1);
+}
+
 /* Server main loop */
 int server_main(struct config *config, int background, char *argv[]) {
-    /* TODO */
-    fprintf(stderr, "NYI\n");
+    struct sigaction act;
+    /* Currently no arguments */
+    if (argv && *argv) {
+        fprintf(stderr, "Too many arguments\n");
+        return 2;
+    }
+    /* Install signal handlers */
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = notifier;
+    sigemptyset(&act.sa_mask);
+    if (sigaction(SIGHUP, &act, NULL) == -1) {
+        perror("Could not install signal handler");
+        return 1;
+    }
+    if (sigaction(SIGTERM, &act, NULL) == -1) {
+        perror("Could not install signal handler");
+        return 1;
+    }
+    /* Create socket */
+    if (comm_listen(config) == -1) {
+        perror("Could not create socket");
+        return 1;
+    }
+    /* Go into background */
+    if (background && daemonize() == -1) {
+        perror("Failed to go into background");
+        return 1;
+    }
+    /* Main loop */
+    /**/
     return 3;
 }
 
@@ -76,9 +115,9 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
     int res, l;
     /* Determine which command to send */
     switch (action) {
-        case SPAWN : cmd = "RUN"   ; param = NULL;       break;
-        case RELOAD: cmd = "SIGNAL"; param = "reload";   break;
-        case TEST  : cmd = "PING"  ; param = NULL;       break;
+        case SPAWN : cmd = "RUN"   ; param = NULL      ; break;
+        case RELOAD: cmd = "SIGNAL"; param = "reload"  ; break;
+        case TEST  : cmd = "PING"  ; param = NULL      ; break;
         case STOP  : cmd = "SIGNAL"; param = "shutdown"; break;
         default:
             fprintf(stderr, "Internal error\n");
