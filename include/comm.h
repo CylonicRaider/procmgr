@@ -98,8 +98,7 @@ int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr);
  * addr (if not NULL) specifies the peer to send the message to.
  * Returns the amount of bytes sent, or -1 on error, with errno set.
  * NOTE that the maximum message length (of MSG_MAXLEN) is enforced as well;
- *      attempts to send longer messages are rejected with an E2BIG. Empty
- *      messages are rejected with a EINVAL. */
+ *      attempts to send longer messages are rejected with an E2BIG. */
 int comm_send(int fd, struct ctlmsg *msg, struct addr *addr);
 
 /* Send an error message

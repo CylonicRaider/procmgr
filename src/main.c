@@ -9,6 +9,10 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "argparse.h"
 #include "control.h"
@@ -33,7 +37,7 @@ const char *HELP =
     "    configuration\n";
 
 /* Global data for signal handlers */
-static int sigpipe[2];
+static int sigpipe[2] = { -1, -1 };
 
 /* Allocate a configuration given a filename */
 struct config *create_config(char *filename) {
@@ -76,11 +80,18 @@ static void notifier(int signum) {
 
 /* Server main loop */
 int server_main(struct config *config, int background, char *argv[]) {
+    struct ctlmsg msg = CTLMSG_INIT;
     struct sigaction act;
+    fd_set readfds;
     /* Currently no arguments */
     if (argv && *argv) {
         fprintf(stderr, "Too many arguments\n");
         return 2;
+    }
+    /* Create communication pipe */
+    if (pipe(sigpipe) == -1) {
+        perror("Could not create pipe");
+        return 1;
     }
     /* Install signal handlers */
     memset(&act, 0, sizeof(act));
@@ -91,6 +102,10 @@ int server_main(struct config *config, int background, char *argv[]) {
         return 1;
     }
     if (sigaction(SIGTERM, &act, NULL) == -1) {
+        perror("Could not install signal handler");
+        return 1;
+    }
+    if (sigaction(SIGCHLD, &act, NULL) == -1) {
         perror("Could not install signal handler");
         return 1;
     }
@@ -105,8 +120,86 @@ int server_main(struct config *config, int background, char *argv[]) {
         return 1;
     }
     /* Main loop */
-    /**/
-    return 3;
+    for (;;) {
+        int nfds, res;
+        struct timeval timeout;
+        /* Prepare for select() */
+        FD_ZERO(&readfds);
+        FD_SET(config->socket, &readfds);
+        FD_SET(sigpipe[0], &readfds);
+        nfds = (config->socket > sigpipe[0]) ? config->socket : sigpipe[0];
+        nfds++;
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+        /* Determine which event to check now */
+        if (select(nfds, &readfds, NULL, NULL, &timeout) == -1) {
+            perror("Failed to select()");
+            return 1;
+        }
+        /* Check for signals */
+        if (FD_ISSET(sigpipe[0], &readfds)) {
+            unsigned char signo;
+            if (read(sigpipe[0], &signo, 1) != 1) {
+                perror("Failed to read");
+                return 1;
+            }
+            /* Act upon them */
+            if (signo == SIGHUP) {
+                /* Reload configuration */
+                /* Disabled because of dangling pointer hazard
+                config_update(config, 0);*/
+            } else if (signo == SIGTERM) {
+                /* Shut down */
+                break;
+            } else if (signo == SIGCHLD) {
+                int pid, status, retcode;
+                /* Wait for children */
+                for (;;) {
+                    /* Harvest exit codes */
+                    pid = waitpid(-1, &status, WNOHANG);
+                    if (pid == -1) {
+                        if (errno == ECHILD) break;
+                        perror("wait() failed");
+                        return 1;
+                    } else if (pid == 0) {
+                        break;
+                    }
+                    /* Assemble retcode */
+                    if (WIFEXITED(status)) {
+                        retcode = WEXITSTATUS(status);
+                    } else if (WIFSIGNALED(status)) {
+                        retcode = -WTERMSIG(status);
+                    } else {
+                        continue;
+                    }
+                    /* Run jobs */
+                    run_jobs(config, pid, retcode);
+                }
+            }
+        }
+        /* Receive message */
+        if (FD_ISSET(config->socket, &readfds)) {
+            struct addr addr;
+            int res = comm_recv(config->socket, &msg, &addr);
+            if (res == -2) continue;
+            if (res == -1) {
+                perror("Failed to receive message");
+                return 1;
+            }
+            /* Act upon it */
+            /* TODO */
+        }
+        /* Run unbound jobs */
+        do {
+            res = run_jobs(config, -1, JOB_NOEXIT);
+            if (res == -1) {
+                perror("Callback execution failed");
+                return 1;
+            }
+        } while (res);
+    }
+    /* Everything went well. :) */
+    return 0;
 }
 
 /* Client main function */
