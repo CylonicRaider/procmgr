@@ -344,7 +344,7 @@ int get_reply(struct config *config) {
         goto end;
     }
     /* Check if the reply is most basically valid. */
-    if (msg.fieldnum < 2) {
+    if (msg.fieldnum < 1) {
         fprintf(stderr, "ERROR: Bad message received\n");
         goto error;
     }
@@ -358,11 +358,15 @@ int get_reply(struct config *config) {
         goto error;
     }
     /* Obtain return value */
-    errno = 0;
-    ret = strtol(msg.fields[1], &end, 0);
-    if (errno || *end) {
-        fprintf(stderr, "ERROR: Invalid number in message\n");
-        goto error;
+    if (msg.fieldnum == 1) {
+        ret = 0;
+    } else {
+        errno = 0;
+        ret = strtol(msg.fields[1], &end, 0);
+        if (errno || *end) {
+            fprintf(stderr, "ERROR: Invalid number in message\n");
+            goto error;
+        }
     }
     /* Check if it is in range. */
     if (ret <= -256 || ret >= 256) {

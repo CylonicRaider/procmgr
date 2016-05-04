@@ -179,6 +179,7 @@ int server_main(struct config *config, int background, char *argv[]) {
         }
         /* Receive message */
         if (FD_ISSET(config->socket, &readfds)) {
+            struct ctlmsg msg2 = CTLMSG_INIT;
             struct addr addr;
             int res = comm_recv(config->socket, &msg, &addr);
             if (res == -2) continue;
@@ -186,8 +187,112 @@ int server_main(struct config *config, int background, char *argv[]) {
                 perror("Failed to receive message");
                 return 1;
             }
-            /* Act upon it */
-            /* TODO */
+            /* Reject non-repliable messages */
+            if (addr.addrlen < sizeof(sa_family_t) ||
+                addr.addr.sun_family == AF_UNSPEC) continue;
+            /* Act upon them */
+            if (msg.fieldnum == 0) {
+                /* No command? Cannot really do anything */
+                if (comm_senderr(config->socket, "NOMSG", "Empty message",
+                                 &addr) == -1) {
+                    perror("Failed to send message");
+                    goto commerr;
+                }
+            } else if (strcmp(msg.fields[0], "PING") == 0) {
+                /* Reply with a PONG */
+                if (msg.fieldnum > 2) {
+                    if (comm_senderr(config->socket, "BADMSG", "Bad message",
+                                     &addr) == -1) {
+                        perror("Failed to send message");
+                        goto commerr;
+                    }
+                } else if (msg.fieldnum == 2) {
+                    char *fields[] = { "PONG", msg.fields[1] };
+                    msg2.fields = fields;
+                    msg2.fieldnum = 2;
+                    if (comm_send(config->socket, &msg2, &addr) == -1) {
+                        perror("Failed to send message");
+                        goto commerr;
+                    }
+                } else {
+                    char *fields[] = { "PONG" };
+                    msg2.fields = fields;
+                    msg2.fieldnum = 1;
+                    if (comm_send(config->socket, &msg2, &addr) == -1) {
+                        perror("Failed to send message");
+                        goto commerr;
+                    }
+                }
+            } else if (strcmp(msg.fields[0], "SIGNAL") == 0) {
+                char *okfields[] = { "OK" };
+                /* Signal oneself, or fail */
+                if (msg.fieldnum != 2) {
+                    if (comm_senderr(config->socket, "BADMSG", "Bad message",
+                                     &addr) == -1) {
+                        perror("Failed to send message");
+                        goto commerr;
+                    }
+                } else if (strcmp(msg.fields[1], "reload") == 0) {
+                    if (raise(SIGHUP) != 0) {
+                        perror("Could not signal oneself ?!");
+                        goto commerr;
+                    }
+                } else if (strcmp(msg.fields[1], "shutdown") == 0) {
+                    if (raise(SIGINT) != 0) {
+                        perror("Could not signal oneself ?!");
+                        goto commerr;
+                    }
+                } else {
+                    if (comm_senderr(config->socket, "BADMSG", "Bad message",
+                                     &addr) == -1) {
+                        perror("Failed to send message");
+                        goto commerr;
+                    }
+                }
+                /* Reply with OK
+                 * The signal handler will have only written to pipe, so we
+                 * can reply safely. */
+                msg2.fields = okfields;
+                msg2.fieldnum = 1;
+                if (comm_send(config->socket, &msg2, &addr) == -1) {
+                    perror("Failed to send message");
+                    goto commerr;
+                }
+            } else if (strcmp(msg.fields[0], "RUN") == 0) {
+                int res;
+                /* Create request */
+                struct request *req = request_new(config, &msg, &addr);
+                if (req == NULL && errno) {
+                    perror("Failed to create request");
+                    goto commerr;
+                }
+                /* Validate it */
+                res = request_validate(req);
+                if (res == -1) {
+                    perror("Failed to validate request");
+                    goto commerr;
+                }
+                if (! res) {
+                    if (comm_senderr(config->socket, "EPERM", "Permission denied",
+                                     &addr) == -1) {
+                        perror("Failed to send message");
+                        goto commerr;
+                    }
+                    continue;
+                }
+                /* Act as appropriate */
+                if (request_run(req) == -1) {
+                    perror("Failed to process request");
+                    goto commerr;
+                }
+                /* Leaking request since it is held by the job queue */
+            } else {
+                if (comm_senderr(config->socket, "BADCMD", "No such command",
+                                 &addr) == -1) {
+                    perror("Failed to send message");
+                    goto commerr;
+                }
+            }
         }
         /* Run unbound jobs */
         do {
@@ -200,6 +305,10 @@ int server_main(struct config *config, int background, char *argv[]) {
     }
     /* Everything went well. :) */
     return 0;
+    /* Error happened while processing message */
+    commerr:
+        comm_del(&msg);
+        return 1;
 }
 
 /* Client main function */
