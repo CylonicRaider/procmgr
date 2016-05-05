@@ -7,40 +7,6 @@
 
 #include "comm.h"
 
-/* Debugging aid */
-#include <stdio.h>
-void print_msg(FILE *fp, struct ctlmsg *msg) {
-    int i;
-    char *p;
-    fputs("[msg ", fp);
-    if (msg->fields) {
-        fputs("[", fp);
-        for (i = 0; i < msg->fieldnum; i++) {
-            if (i) fputs(", ", fp);
-            if (! msg->fields[i]) {
-                fputs("NULL", fp);
-                continue;
-            }
-            fputc('"', fp);
-            for (p = msg->fields[i]; *p; p++) {
-                if (*p == '\n') {
-                    fputs("\\n", fp);
-                    continue;
-                }
-                if (*p == '"' || *p == '\\') fputc('\\', fp);
-                fputc(*p, fp);
-            }
-            fputc('"', fp);
-        }
-        fputc(']', fp);
-    } else {
-        fputs("NULL", fp);
-    }
-    fprintf(fp, " {pid=%d uid=%d gid=%d} {in=%d out=%d err=%d}]\n",
-            msg->creds.pid, msg->creds.uid, msg->creds.gid,
-            msg->fds[0], msg->fds[1], msg->fds[2]);
-}
-
 /* Size of ancillary data buffer */
 #define ANCBUF_SIZE 256
 
@@ -224,9 +190,6 @@ int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr, int flags) {
     }
     /* Fill in addr */
     if (addr) *addr = raddr;
-    /* Tracing */
-    fputs("got : ", stderr);
-    print_msg(stderr, msg);
     /* Done */
     return ret;
     /* Error while allocating payload */
@@ -246,9 +209,6 @@ int comm_send(int fd, struct ctlmsg *msg, struct addr *addr, int flags) {
     msg->creds.pid = getpid();
     msg->creds.uid = geteuid();
     msg->creds.gid = getegid();
-    /* Tracing */
-    fputs("send: ", stderr);
-    print_msg(stderr, msg);
     /* Validate flags */
     if (flags & ~COMM_DONTWAIT) {
         errno = EINVAL;
