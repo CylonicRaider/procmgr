@@ -98,6 +98,9 @@ struct config {
 /* Individual program
  * Members:
  * name       : (char *) Name of program.
+ * refcount   : (int) The amount of references to this program, not counting
+ *              linked list interconnections. Increase this manually where
+ *              necessary, and use prog_del() to deal with decreasing.
  * pid        : (int) PID of the instance of the program currently running,
  *              or -1 if none.
  * flags      : (int) Flags. See the PROG_* constants for descriptions.
@@ -122,6 +125,7 @@ struct config {
  *              a trailing newline as well), and 1 is returned. */
 struct program {
     char *name;
+    int refcount;
     int pid;
     int flags;
     int delay;
@@ -207,15 +211,16 @@ struct program *config_get(struct config *conf, char *name);
 void config_remove(struct config *conf, struct program *prog);
 
 /* Allocate a program using the configuration from the given configuration
- * object and configuration section (none, any, or both can be NULL) */
+ * object and configuration section (none, any, or both can be NULL)
+ * The reference count of the program is initially 1. */
 struct program *prog_new(struct config *conf, struct section *config);
 
 /* Free all the resources underlying the given structure
+ * If the reference count is more than 1, it is merely decreased.
  * If this is part of a linked list, the references are updated accordingly;
  * note however that the beginning of the list must be updated as well.
- * If any program corresponding to this section is running, nothing happens
- * to it. */
-void prog_del(struct program *prog);
+ * Returns whether it is safe to free() the structure now. */
+int prog_del(struct program *prog);
 
 /* Deallocate the given structure, as well as any others linked to it */
 void prog_free(struct program *prog);

@@ -146,8 +146,7 @@ int server_main(struct config *config, int background, char *argv[]) {
             /* Act upon them */
             if (signo == SIGHUP) {
                 /* Reload configuration */
-                /* Disabled because of dangling pointer hazard
-                config_update(config, 0);*/
+                config_update(config, 0);
             } else if (signo == SIGTERM) {
                 /* Shut down */
                 break;

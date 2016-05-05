@@ -185,8 +185,7 @@ int config_update(struct config *conf, int quiet) {
             prog->prev->next = prog->next;
             if (prog->next) prog->next->prev = prog->prev;
         }
-        prog_del(prog);
-        free(prog);
+        if (prog_del(prog)) free(prog);
     }
     /* Done */
     return ret;
@@ -230,8 +229,7 @@ void config_add(struct config *conf, struct program *prog) {
     prog->flags = old->flags & ~PROG_REMOVE;
     prog->pid = old->pid;
     /* Deallocate old structure */
-    prog_del(old);
-    free(old);
+    if (prog_del(old)) free(old);
 }
 
 /* Return the program named by the given string, or NULL if none */
@@ -246,8 +244,7 @@ struct program *config_get(struct config *conf, char *name) {
 /* Remove the given program from the configuration, deallocating it */
 void config_remove(struct config *conf, struct program *prog) {
     if (conf->programs == prog) conf->programs = prog->next;
-    prog_del(prog);
-    free(prog);
+    if (prog_del(prog)) free(old);
 }
 
 /* Allocate a program using the configuration from the given configuration
@@ -257,6 +254,8 @@ struct program *prog_new(struct config *conf, struct section *config) {
     struct program *ret = calloc(1, sizeof(struct program));
     struct action *act = NULL;
     int i, def_uid, def_gid;
+    /* Set reference count */
+    ret->refcount = 1;
     /* Set name */
     if (! config->name) {
         ret->name = strdup("");
@@ -313,7 +312,8 @@ struct program *prog_new(struct config *conf, struct section *config) {
 }
 
 /* Free all the resources underlying the given structure */
-void prog_del(struct program *prog) {
+int prog_del(struct program *prog) {
+    if (--prog->refcount) return 0;
     if (prog->name) free(prog->name);
     prog->pid = -1;
     prog->flags = 0;
@@ -328,6 +328,7 @@ void prog_del(struct program *prog) {
     action_free(&prog->act_signal);
     action_free(&prog->act_stop);
     action_free(&prog->act_status);
+    return 1;
 }
 
 /* Deallocate the given structure, as well as any others linked to it */
@@ -335,16 +336,13 @@ void prog_free(struct program *prog) {
     struct program *prev, *next, *cur;
     for (cur = prog->prev; cur; cur = prev) {
         prev = cur->prev;
-        prog_del(cur);
-        free(cur);
+        if (prog_del(cur)) free(cur);
     }
     for (cur = prog->next; cur; cur = next) {
         next = cur->next;
-        prog_del(cur);
-        free(cur);
+        if (prog_del(cur)) free(cur);
     }
-    prog_del(prog);
-    free(prog);
+    if (prog_del(prog)) free(prog);
 }
 
 /* Parse an integer literal ("none" maps to -1 if accept_none is one)

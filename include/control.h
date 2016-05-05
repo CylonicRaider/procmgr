@@ -48,6 +48,7 @@ struct request {
  * command.
  * If the request is incomplete, an error message is sent to addr, and
  * an error of 0 ("Success") is raised.
+ * A reference to the program mentioned is kept by the request.
  * Returns a pointer to the request structure, or NULL on failure. */
 struct request *request_new(struct config *config, struct ctlmsg *msg,
                             struct addr *addr, int flags);

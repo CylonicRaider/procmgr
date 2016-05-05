@@ -66,6 +66,7 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
             addr, flags) == -1) goto error;
         goto errmsg;
     }
+    ret->program->refcount++;
     ret->action = prog_action(ret->program, msg->fields[2]);
     if (! ret->action) {
         if (comm_senderr(config->socket, "NOACTION", "No such action",
@@ -261,6 +262,9 @@ void request_free(struct request *request) {
     if (request->fds[0] != -1) close(request->fds[0]);
     if (request->fds[1] != -1) close(request->fds[1]);
     if (request->fds[2] != -1) close(request->fds[2]);
+    /* Reference-counted, might be the last reference to it */
+    if (request->program && prog_del(request->program))
+        free(request->program);
     free(request);
 }
 
