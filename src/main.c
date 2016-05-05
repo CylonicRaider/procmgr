@@ -75,7 +75,9 @@ void usage(int help, int retcode) {
 /* Signal handler */
 static void notifier(int signum) {
     unsigned char sn = signum;
-    write(sigpipe[1], &sn, 1);
+    int res = write(sigpipe[1], &sn, 1);
+    /* YES, I'm USING it. */
+    (void) res;
 }
 
 /* Server main loop */
@@ -101,6 +103,10 @@ int server_main(struct config *config, int background, char *argv[]) {
         perror("Could not install signal handler");
         return 1;
     }
+    if (sigaction(SIGINT, &act, NULL) == -1) {
+        perror("Could not install signal handler");
+        return 1;
+    }
     if (sigaction(SIGTERM, &act, NULL) == -1) {
         perror("Could not install signal handler");
         return 1;
@@ -119,12 +125,13 @@ int server_main(struct config *config, int background, char *argv[]) {
         perror("Failed to go into background");
         return 1;
     }
+    /* Final preparations */
+    FD_ZERO(&readfds);
     /* Main loop */
     for (;;) {
         int nfds, res;
         struct timeval timeout;
         /* Prepare for select() */
-        FD_ZERO(&readfds);
         FD_SET(config->socket, &readfds);
         FD_SET(sigpipe[0], &readfds);
         nfds = (config->socket > sigpipe[0]) ? config->socket : sigpipe[0];
@@ -132,9 +139,14 @@ int server_main(struct config *config, int background, char *argv[]) {
         timeout.tv_sec = 1;
         timeout.tv_usec = 0;
         /* Determine which event to check now */
-        if (select(nfds, &readfds, NULL, NULL, &timeout) == -1) {
-            perror("Failed to select()");
-            return 1;
+        res = select(nfds, &readfds, NULL, NULL, &timeout);
+        if (res == -1) {
+            if (errno == EINTR) {
+                FD_ZERO(&readfds);
+            } else {
+                perror("Failed to select()");
+                return 1;
+            }
         }
         /* Check for signals */
         if (FD_ISSET(sigpipe[0], &readfds)) {
@@ -147,7 +159,7 @@ int server_main(struct config *config, int background, char *argv[]) {
             if (signo == SIGHUP) {
                 /* Reload configuration */
                 config_update(config, 0);
-            } else if (signo == SIGTERM) {
+            } else if (signo == SIGINT || signo == SIGTERM) {
                 /* Shut down */
                 break;
             } else if (signo == SIGCHLD) {
@@ -176,18 +188,21 @@ int server_main(struct config *config, int background, char *argv[]) {
                     run_jobs(config, pid, retcode);
                     /* Restart automatically, if applicable */
                     prog = config_getpid(config, pid);
-                    if (prog && prog->delay > 0) {
-                        struct request *req = request_synth(config, prog,
-                            "start", NULL);
-                        if (! req) {
-                            perror("Failed to allocate request");
-                            goto commerr;
-                        }
-                        if (! request_schedule(req, timestamp() +
-                                               prog->delay)) {
-                            request_free(req);
-                            perror("Failed to schedule request");
-                            goto commerr;
+                    if (prog) {
+                        prog->pid = -1;
+                        if (prog->delay > 0) {
+                            struct request *req = request_synth(config, prog,
+                                "start", NULL);
+                            if (! req) {
+                                perror("Failed to allocate request");
+                                goto commerr;
+                            }
+                            if (! request_schedule(req, timestamp() +
+                                                prog->delay)) {
+                                request_free(req);
+                                perror("Failed to schedule request");
+                                goto commerr;
+                            }
                         }
                     }
                 }
@@ -251,7 +266,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                     }
                     fields[0] = "OK";
                 } else if (strcmp(msg.fields[1], "shutdown") == 0) {
-                    if (raise(SIGINT) != 0) {
+                    if (raise(SIGTERM) != 0) {
                         perror("Could not signal oneself ?!");
                         goto commerr;
                     }
@@ -270,7 +285,8 @@ int server_main(struct config *config, int background, char *argv[]) {
                 /* Create request */
                 struct request *req = request_new(config, &msg, &addr,
                                                   COMM_DONTWAIT);
-                if (req == NULL && errno) {
+                if (req == NULL) {
+                    if (! errno) continue;
                     perror("Failed to create request");
                     goto commerr;
                 }
@@ -293,7 +309,8 @@ int server_main(struct config *config, int background, char *argv[]) {
                     perror("Failed to process request");
                     goto commerr;
                 }
-                /* Leaking request since it is held by the job queue */
+                /* Dispose of request */
+                request_free(req);
             } else {
                 if (comm_senderr(config->socket, "BADCMD", "No such command",
                                  &addr, COMM_DONTWAIT) == -1) {
@@ -305,13 +322,15 @@ int server_main(struct config *config, int background, char *argv[]) {
             if (fields[0]) {
                 msg2.fieldnum = 0;
                 while (fields[msg2.fieldnum]) msg2.fieldnum++;
-                msg2.fieldnum--;
+                msg2.fields = fields;
                 if (comm_send(config->socket, &msg2, &addr,
                               COMM_DONTWAIT) == -1) {
                     perror("Failed to send message");
                     goto commerr;
                 }
             }
+            /* Clean message */
+            comm_del(&msg);
         }
         /* Run unbound jobs */
         do {
@@ -379,8 +398,12 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
     /* Obtain reply */
     res = get_reply(config, 0);
     if (res == REPLY_ERROR) {
-        perror("Error while receiving reply");
-        return 1;
+        if (errno) {
+            perror("Error while receiving reply");
+            return 1;
+        } else {
+            res = 1;
+        }
     }
     return res;
 }

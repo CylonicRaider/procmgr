@@ -22,7 +22,7 @@ obj bin:
 	mkdir -p $@
 
 debug: bin/procmgr
-	gdb bin/procmgr
+	gdb bin/procmgr $$([ -r core ] && echo core)
 
 clean:
 	rm -rf obj core

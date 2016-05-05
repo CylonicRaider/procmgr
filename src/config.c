@@ -290,12 +290,13 @@ struct program *prog_new(struct config *conf, struct section *config) {
         for (i = 0; i < action_count; i++) {
             /* Set command */
             pair = section_get_last(config, action_names[i].cmd);
-            if (! pair) continue;
             act = calloc(1, sizeof(struct action));
             if (! act) goto error;
             act->name = action_names[i].base;
-            act->command = strdup(pair->value);
-            if (! act->command) goto error;
+            if (pair) {
+                act->command = strdup(pair->value);
+                if (! act->command) goto error;
+            }
             /* Set up UID and GID */
             act->allow_uid = def_uid;
             act->allow_gid = def_gid;
@@ -311,6 +312,7 @@ struct program *prog_new(struct config *conf, struct section *config) {
     }
     /* Set miscellaneous variables */
     ret->refcount = 1;
+    ret->pid = -1;
     ret->delay = -1;
     /* Done */
     goto end;

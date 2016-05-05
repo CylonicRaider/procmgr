@@ -356,7 +356,7 @@ int conffile_parse(struct conffile *file, int *curline) {
     section = malloc(sizeof(cursec));
     if (! section) goto end;
     *section = cursec;
-    conffile_add(file, section);
+    conffile_add(&curfile, section);
     cursec.data = NULL;
     cursec.name = NULL;
     /* Swap old configuration with new one */

@@ -165,6 +165,20 @@ int request_run(struct request *request) {
     struct request *req = NULL;
     struct job *job;
     int ret = 0;
+    /* Check for state validity */
+    if (prog->pid != -1) {
+        if (request->action == prog->act_start) {
+            return (request_senderr(request, "BUSY",
+                                    "Program already running")) ? 0 : -1;
+        }
+    } else {
+        if (request->action == prog->act_restart ||
+                request->action == prog->act_reload ||
+                request->action == prog->act_stop) {
+            return (request_senderr(request, "NOTRUNNING",
+                                    "No program running")) ? 0 : -1;
+        }
+    }
     /* Update flags */
     if (request->action == prog->act_start ||
             request->action == prog->act_restart) {
@@ -214,12 +228,14 @@ int request_run(struct request *request) {
             return (request_reply(request->config->socket, &request->addr,
                                   request->cflags, 0)) ? 0 : -1;
         } else if (request->action == prog->act_stop) {
-            /* Kill process, if any
-             * Reply will be sent when it dies */
+            /* Kill process
+             * The branch above should eliminate the case where prog->pid is
+             * -1, but accidentally killing every process we can is *not* the
+             * scenario we desire. */
             if (prog->pid != -1) {
-                return (kill(prog->pid, SIGTERM) == -1) ? -1 : 0;
+                if (kill(prog->pid, SIGTERM) == -1) return -1;
             }
-            return 0;
+            /* Fall through to scheduling a waiter below */
         } else if (request->action == prog->act_status) {
             /* Write "running" or "not running" depending on whether there is
              * a process or not. */
@@ -242,7 +258,7 @@ int request_run(struct request *request) {
             return -1;
         }
     } else {
-        char **p, **argv, *envp[5], pidbuf[64];
+        char **p, **argv, *envp[6], pidbuf[64];
         /* Prepare for job spawning */
         int l = 4;
         for (p = request->argv; *p; p++) l++;
@@ -263,6 +279,7 @@ int request_run(struct request *request) {
             snprintf(pidbuf, sizeof(pidbuf), "PID=%d", prog->pid);
             envp[4] = pidbuf;
         }
+        envp[5] = NULL;
         /* Spawn child process */
         ret = fork();
         if (ret == 0) {
@@ -270,10 +287,19 @@ int request_run(struct request *request) {
             setup_fds(request);
             /* exec() script */
             execve(argv[0], argv, envp);
+            perror("execve");
             _exit(127);
+        } else if (ret == -1) {
+            /* Handle errors */
+            return -1;
         }
         /* Clean up */
         for (l = 0; l < 4; l++) free(envp[l]);
+    }
+    /* Update internal PID */
+    if (request->action == prog->act_start ||
+            request->action == prog->act_restart) {
+        prog->pid = (ret == 0) ? -1 : ret;
     }
     /* Reply to starts immediately */
     if (request->action == prog->act_start) {
@@ -282,10 +308,9 @@ int request_run(struct request *request) {
     }
     /* Only falling through here if we want to wait on something ->
      * Schedule waiter */
-    if (ret != -1 && request->reply) {
+    if (request->reply) {
         int stopping = (request->action == prog->act_stop);
-        int waitfor = (stopping) ? prog->pid : ret;
-        if (! submit_waiter(request, waitfor))
+        if (! submit_waiter(request, (stopping) ? prog->pid : ret))
             return -1;
     }
     return ret;
