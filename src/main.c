@@ -220,6 +220,13 @@ int server_main(struct config *config, int background, char *argv[]) {
                         perror("Failed to send message");
                         goto commerr;
                     }
+                } else if (msg.creds.uid != 0) {
+                    if (comm_senderr(config->socket, "EPERM",
+                                     "Permission denied", &addr,
+                                     COMM_DONTWAIT) == -1) {
+                        perror("Failed to send message");
+                        goto commerr;
+                    }
                 } else if (strcmp(msg.fields[1], "reload") == 0) {
                     if (raise(SIGHUP) != 0) {
                         perror("Could not signal oneself ?!");
