@@ -4,6 +4,7 @@
 #define _GNU_SOURCE
 #include <dirent.h>
 #include <errno.h>
+#include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -26,7 +27,6 @@ static int setup_fds(struct request *request);
 static int request_senderr(struct request *request, char *code, char *desc);
 static int request_reply(int fd, struct addr *addr, int flags, int code);
 static struct job *submit_waiter(struct request *request, int pid);
-static struct job *submit_job(struct request *request);
 static int _run_waiter(void *data, int retcode);
 static int _run_request(void *data, int retcode);
 static void _free_request(void *data);
@@ -87,6 +87,9 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
     ret->addr = *addr;
     ret->cflags = flags;
     ret->reply = 1;
+    msg->fds[0] = -1;
+    msg->fds[1] = -1;
+    msg->fds[2] = -1;
     /* Done */
     return ret;
     /* Error handling */
@@ -94,9 +97,40 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
         errno = 0;
     error:
         if (ret) request_free(ret);
-        if (msg->fds[0] != -1) close(msg->fds[0]);
-        if (msg->fds[1] != -1) close(msg->fds[1]);
-        if (msg->fds[2] != -1) close(msg->fds[2]);
+        return NULL;
+}
+
+/* Create a "synthetic" request */
+struct request *request_synth(struct config *config, struct program *prog,
+                              char *actname, char **argv) {
+    int i, l = 1;
+    char **p;
+    /* Allocate structure */
+    struct request *ret = calloc(1, sizeof(struct request));
+    if (! ret) return NULL;
+    ret->fds[0] = ret->fds[1] = ret->fds[2] = -1;
+    /* Copy in pointers */
+    ret->config = config;
+    ret->program = prog;
+    ret->program->refcount++;
+    ret->action = prog_action(prog, actname);
+    if (! ret->action) goto error;
+    /* Duplicate argv */
+    if (argv) for (p = argv; *p; p++) l++;
+    ret->argv = calloc(l, sizeof(char *));
+    if (! ret->argv) goto error;
+    for (i = 0; i < l; i++) {
+        ret->argv[i] = strdup(argv[i]);
+        if (! ret->argv[i]) goto error;
+    }
+    /* Finish */
+    ret->creds.pid = -1;
+    ret->creds.uid = -1;
+    ret->creds.gid = -1;
+    return ret;
+    /* An error occurred */
+    error:
+        if (ret) request_free(ret);
         return NULL;
 }
 
@@ -114,6 +148,15 @@ int request_validate(struct request *request) {
                                 "Not authorized")) ? 0 : -1;
     }
     return 1;
+}
+
+/* Schedule the request to be run (possibly) later */
+struct job *request_schedule(struct request *request, double notBefore) {
+    struct job *ret = job_new(_run_request, _free_request, request);
+    if (! ret) return NULL;
+    jobqueue_append(request->config->jobs, ret);
+    ret->notBefore = notBefore;
+    return ret;
 }
 
 /* Perform the given action */
@@ -157,7 +200,7 @@ int request_run(struct request *request) {
             res = request_run(request);
             if (res == -1) goto error;
             /* Dispatch follow-up action */
-            job = submit_job(req);
+            job = request_schedule(req, NAN);
             if (! job) goto error;
             if (res) job->waitfor = res;
             return 0;
@@ -435,6 +478,7 @@ int setup_fds(struct request *request) {
 /* Send an error message to the client as specified by the given request,
  * and return whether that succeeded. */
 int request_senderr(struct request *request, char *code, char *desc) {
+    if (! request->addr.addrlen) return 0;
     return (comm_senderr(request->config->socket, code, desc,
                          &request->addr, request->cflags) != -1);
 }
@@ -443,18 +487,11 @@ int request_senderr(struct request *request, char *code, char *desc) {
 int request_reply(int fd, struct addr *addr, int flags, int code) {
     char numbuf[64], *fields[] = { "OK", numbuf };
     struct ctlmsg msg = CTLMSG_INIT;
+    if (! addr->addrlen) return 0;
     snprintf(numbuf, sizeof(numbuf), "%d", code);
     msg.fields = fields;
     msg.fieldnum = sizeof(fields) / sizeof(*fields);
     return (comm_send(fd, &msg, addr, flags) != -1);
-}
-
-/* Schedule a job wrapping this request to be run */
-struct job *submit_job(struct request *request) {
-    struct job *ret = job_new(_run_request, _free_request, request);
-    if (! ret) return NULL;
-    jobqueue_append(request->config->jobs, ret);
-    return ret;
 }
 
 /* Schedule a job wrapping this request to be run */

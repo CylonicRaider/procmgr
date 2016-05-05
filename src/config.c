@@ -241,10 +241,20 @@ struct program *config_get(struct config *conf, char *name) {
     return cur;
 }
 
+/* Return the program currently running as pid, or NULL if none */
+struct program *config_getpid(struct config *conf, int pid) {
+    struct program *cur;
+    if (pid == -1) return NULL;
+    for (cur = conf->programs; cur; cur = cur->next) {
+        if (cur->pid == pid) break;
+    }
+    return cur;
+}
+
 /* Remove the given program from the configuration, deallocating it */
 void config_remove(struct config *conf, struct program *prog) {
     if (conf->programs == prog) conf->programs = prog->next;
-    if (prog_del(prog)) free(old);
+    if (prog_del(prog)) free(prog);
 }
 
 /* Allocate a program using the configuration from the given configuration
@@ -254,8 +264,6 @@ struct program *prog_new(struct config *conf, struct section *config) {
     struct program *ret = calloc(1, sizeof(struct program));
     struct action *act = NULL;
     int i, def_uid, def_gid;
-    /* Set reference count */
-    ret->refcount = 1;
     /* Set name */
     if (! config->name) {
         ret->name = strdup("");
@@ -301,6 +309,9 @@ struct program *prog_new(struct config *conf, struct section *config) {
             *action_pointer(ret, action_names[i].base) = act;
         }
     }
+    /* Set miscellaneous variables */
+    ret->refcount = 1;
+    ret->delay = -1;
     /* Done */
     goto end;
     error:

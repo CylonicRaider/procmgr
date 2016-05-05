@@ -154,6 +154,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                 int pid, status, retcode;
                 /* Wait for children */
                 for (;;) {
+                    struct program *prog;
                     /* Harvest exit codes */
                     pid = waitpid(-1, &status, WNOHANG);
                     if (pid == -1) {
@@ -173,6 +174,22 @@ int server_main(struct config *config, int background, char *argv[]) {
                     }
                     /* Run jobs */
                     run_jobs(config, pid, retcode);
+                    /* Restart automatically, if applicable */
+                    prog = config_getpid(config, pid);
+                    if (prog && prog->delay > 0) {
+                        struct request *req = request_synth(config, prog,
+                            "start", NULL);
+                        if (! req) {
+                            perror("Failed to allocate request");
+                            goto commerr;
+                        }
+                        if (! request_schedule(req, timestamp() +
+                                               prog->delay)) {
+                            request_free(req);
+                            perror("Failed to schedule request");
+                            goto commerr;
+                        }
+                    }
                 }
             }
         }
@@ -330,7 +347,7 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
     /* Prepend command to arguments */
     if (action == SPAWN) {
         l = 2;
-        for (data = argv; data && *data; data++) l++;
+        if (argv) for (data = argv; *data; data++) l++;
         data = calloc(l, sizeof(char *));
         if (! data) {
             perror("Failed to allocate memory");

@@ -48,10 +48,21 @@ struct request {
  * command.
  * If the request is incomplete, an error message is sent to addr, and
  * an error of 0 ("Success") is raised.
- * A reference to the program mentioned is kept by the request.
+ * A reference to the program mentioned is kept by the request; file
+ * descriptors passed along with msg are "stolen" from it (so that
+ * they would not be deleted with the message).
  * Returns a pointer to the request structure, or NULL on failure. */
 struct request *request_new(struct config *config, struct ctlmsg *msg,
                             struct addr *addr, int flags);
+
+/* Create a "synthetic" request
+ * The action is resolved automatically from the program; the credentials and
+ * the additional file descriptors are set to -1; addr's length is zero;
+ * cflags are zero since no communication happens; reply is zero.
+ * NOTE that the request will not pass request_validate().
+ * Returns the newly allocated structure, or NULL on failure. */
+struct request *request_synth(struct config *config, struct program *prog,
+                              char *actname, char **argv);
 
 /* Verify that the credentials given in the request are authorized to
  * perform the requested action
@@ -62,6 +73,11 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
  * it fails (an error message is sent to the client as specified by the
  * request), or -1 if a fatal error happens. */
 int request_validate(struct request *request);
+
+/* Schedule the request to be run (possibly) later
+ * notBefore is a UNIX timestamp, as elaborated in jobs.h
+ * Returns the job allocated, or NULL if that fails */
+struct job *request_schedule(struct request *request, double notBefore);
 
 /* Perform the given action
  * Might perform immediately, or submit a job to the configuration's queue.

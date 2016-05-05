@@ -11,7 +11,7 @@
  * section).
  *
  *     socket-path = <communication socket path>
- *     allow-uid = <default numerical UID to allow, or an explicit "none">
+ *     allow-uid = <default numerical UID to allow>
  *     allow-gid = <similar to allow-uid>
  *
  *     [prog-<name>]
@@ -22,6 +22,11 @@
  *     gid-<action> = <GID to allow to perform this action>
  *     restart-delay = <seconds after which approximately to restart>
  *
+ * For the UID and GID fields, and resart-delay, the special value "none"
+ * (which is equal to -1) may be used, indicating that no UID/GID should be
+ * allowed to perform an action, or that the program should not be
+ * automatically restarted (as it happens for every non-positive value of
+ * restart-delay), respectively.
  * Arbitrarily many program sections can be specified; out of same-named
  * ones, only the last is considered; similarly for all values. Spacing
  * between sections is purely decorational, although it increases legibility.
@@ -206,6 +211,10 @@ void config_add(struct config *conf, struct program *prog);
 
 /* Return the program named by the given string, or NULL if none */
 struct program *config_get(struct config *conf, char *name);
+
+/* Return the program currently running as pid, or NULL if none
+ * A PID of -1 returns NULL. */
+struct program *config_getpid(struct config *conf, int pid);
 
 /* Remove the given program from the configuration, deallocating it */
 void config_remove(struct config *conf, struct program *prog);

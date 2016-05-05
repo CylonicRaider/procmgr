@@ -8,7 +8,7 @@
 #include "util.h"
 
 /* The current UNIX timestamp as a double-precision floating-point value */
-double timestamp(void) {
+double timestamp() {
     struct timeval tv;
     /* Should not fail... :S */
     if (gettimeofday(&tv, NULL) == -1)
