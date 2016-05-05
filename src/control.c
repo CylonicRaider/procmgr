@@ -16,6 +16,7 @@ struct waiter {
     int fd;
     int pid;
     struct addr replyto;
+    int flags;
 };
 
 static char *action_names[] = { "start", "restart", "reload", "signal",
@@ -23,7 +24,7 @@ static char *action_names[] = { "start", "restart", "reload", "signal",
 #define action_count (sizeof(action_names) / sizeof(*action_names))
 static int setup_fds(struct request *request);
 static int request_senderr(struct request *request, char *code, char *desc);
-static int request_reply(int fd, struct addr *addr, int code);
+static int request_reply(int fd, struct addr *addr, int flags, int code);
 static struct job *submit_waiter(struct request *request, int pid);
 static struct job *submit_job(struct request *request);
 static int _run_waiter(void *data, int retcode);
@@ -45,7 +46,7 @@ static inline int dupfd(int from, int *to) {
 
 /* Create a request from the given message */
 struct request *request_new(struct config *config, struct ctlmsg *msg,
-                            struct addr *addr) {
+                            struct addr *addr, int flags) {
     int i;
     /* Allocate structure */
     struct request *ret = calloc(1, sizeof(struct request));
@@ -54,7 +55,7 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
     /* Check field amount */
     if (msg->fieldnum < 3) {
         if (comm_senderr(config->socket, "NOPARAMS", "Missing parameters",
-            addr) == -1) goto error;
+            addr, flags) == -1) goto error;
         goto errmsg;
     }
     /* Fill in members */
@@ -62,13 +63,13 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
     ret->program = config_get(config, msg->fields[1]);
     if (! ret->program) {
         if (comm_senderr(config->socket, "NOPROG", "No such program",
-            addr) == -1) goto error;
+            addr, flags) == -1) goto error;
         goto errmsg;
     }
     ret->action = prog_action(ret->program, msg->fields[2]);
     if (! ret->action) {
         if (comm_senderr(config->socket, "NOACTION", "No such action",
-            addr) == -1) goto error;
+            addr, flags) == -1) goto error;
         goto errmsg;
     }
     ret->argv = calloc(msg->fieldnum - 2, sizeof(char *));
@@ -83,6 +84,7 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
     ret->fds[1] = msg->fds[1];
     ret->fds[2] = msg->fds[2];
     ret->addr = *addr;
+    ret->cflags = flags;
     ret->reply = 1;
     /* Done */
     return ret;
@@ -166,7 +168,7 @@ int request_run(struct request *request) {
             /* Do nothing */
             if (! request->reply) return 0;
             return (request_reply(request->config->socket, &request->addr,
-                                  0)) ? 0 : -1;
+                                  request->cflags, 0)) ? 0 : -1;
         } else if (request->action == prog->act_stop) {
             /* Kill process, if any
              * Reply will be sent when it dies */
@@ -232,7 +234,7 @@ int request_run(struct request *request) {
     /* Reply to starts immediately */
     if (request->action == prog->act_start) {
         return (request_reply(request->config->socket, &request->addr,
-                              0)) ? 0 : -1;
+                              request->cflags, 0)) ? 0 : -1;
     }
     /* Only falling through here if we want to wait on something ->
      * Schedule waiter */
@@ -288,7 +290,7 @@ int run_jobs(struct config *config, int pid, int retcode) {
 }
 
 /* Send a request to perform an action as specified in the argument list */
-int send_request(struct config *config, char **argv) {
+int send_request(struct config *config, char **argv, int flags) {
     struct ctlmsg msg = CTLMSG_INIT;
     int i, ret;
     char **p;
@@ -324,7 +326,7 @@ int send_request(struct config *config, char **argv) {
     msg.fds[1] = STDOUT_FILENO;
     msg.fds[2] = STDERR_FILENO;
     /* Send! */
-    ret = comm_send(config->socket, &msg, NULL);
+    ret = comm_send(config->socket, &msg, NULL, flags);
     /* Clean up */
     free(msg.fields);
     /* Done */
@@ -332,12 +334,12 @@ int send_request(struct config *config, char **argv) {
 }
 
 /* Wait for a message to arrive and return the desired return code */
-int get_reply(struct config *config) {
+int get_reply(struct config *config, int flags) {
     struct ctlmsg msg = CTLMSG_INIT;
     int ret;
     char *end;
     /* Receive! */
-    ret = comm_recv(config->socket, &msg, NULL);
+    ret = comm_recv(config->socket, &msg, NULL, flags);
     /* Abort on error. */
     if (ret < 0) {
         ret = REPLY_ERROR;
@@ -430,17 +432,17 @@ int setup_fds(struct request *request) {
  * and return whether that succeeded. */
 int request_senderr(struct request *request, char *code, char *desc) {
     return (comm_senderr(request->config->socket, code, desc,
-                         &request->addr) != -1);
+                         &request->addr, request->cflags) != -1);
 }
 
 /* Send a successful completion message */
-int request_reply(int fd, struct addr *addr, int code) {
+int request_reply(int fd, struct addr *addr, int flags, int code) {
     char numbuf[64], *fields[] = { "OK", numbuf };
     struct ctlmsg msg = CTLMSG_INIT;
     snprintf(numbuf, sizeof(numbuf), "%d", code);
     msg.fields = fields;
     msg.fieldnum = sizeof(fields) / sizeof(*fields);
-    return (comm_send(fd, &msg, addr) != -1);
+    return (comm_send(fd, &msg, addr, flags) != -1);
 }
 
 /* Schedule a job wrapping this request to be run */
@@ -460,6 +462,7 @@ struct job *submit_waiter(struct request *request, int pid) {
     wt->fd = request->config->socket;
     wt->pid = pid;
     wt->replyto = request->addr;
+    wt->flags = request->cflags;
     ret = job_new(_run_waiter, free, wt);
     if (! ret) {
         free(wt);
@@ -477,7 +480,8 @@ int _run_waiter(void *data, int retcode) {
         errno = EINVAL;
         return -1;
     }
-    return (request_reply(wt->fd, &wt->replyto, retcode)) ? 0 : -1;
+    return (request_reply(wt->fd, &wt->replyto, wt->flags,
+                          retcode)) ? 0 : -1;
 }
 
 /* Execute the payload of the given request */

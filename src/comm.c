@@ -97,13 +97,18 @@ int comm_connect(struct config *conf) {
 }
 
 /* Receive a message from the communication socket */
-int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr) {
+int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr, int flags) {
     char buf[MSG_MAXLEN], credbuf[ANCBUF_SIZE];
     int ret, i, j;
     struct addr raddr;
     struct iovec bufvec;
     struct msghdr hdr;
     struct cmsghdr *cmsg;
+    /* Validate flags */
+    if (flags & ~COMM_DONTWAIT) {
+        errno = EINVAL;
+        return -1;
+    }
     /* Deallocate old data */
     comm_del(msg);
     /* Prepare buffers for receiving */
@@ -115,14 +120,20 @@ int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr) {
     hdr.msg_iovlen = 1;
     hdr.msg_control = credbuf;
     hdr.msg_controllen = sizeof(credbuf);
-    hdr.msg_flags = 0;
+    hdr.msg_flags = (flags & COMM_DONTWAIT) ? MSG_DONTWAIT : 0;
     /* Actually read message */
     ret = recvmsg(fd, &hdr, 0);
-    if (ret == -1) return -1;
+    if (ret == -1) {
+        if (flags & COMM_DONTWAIT && (errno == EAGAIN ||
+                                      errno == EWOULDBLOCK)) {
+            return -2;
+        }
+        return -1;
+    }
     raddr.addrlen = hdr.msg_namelen;
     /* Check for invalid messages */
     if (ret != 0 && buf[ret - 1]) {
-        if (comm_senderr(fd, "BADMSG", "Bad message", &raddr) == -1) {
+        if (comm_senderr(fd, "BADMSG", "Bad message", &raddr, flags) == -1) {
             return -1;
         } else {
             return -2;
@@ -188,9 +199,9 @@ int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr) {
 }
 
 /* Send a message through the communication socket */
-int comm_send(int fd, struct ctlmsg *msg, struct addr *addr) {
+int comm_send(int fd, struct ctlmsg *msg, struct addr *addr, int flags) {
     char buf[MSG_MAXLEN], credbuf[ANCBUF_SIZE];
-    int buflen = 0, i;
+    int buflen = 0, i, ret;
     struct iovec bufvec;
     struct msghdr hdr;
     struct cmsghdr *cmsg;
@@ -198,6 +209,11 @@ int comm_send(int fd, struct ctlmsg *msg, struct addr *addr) {
     msg->creds.pid = getpid();
     msg->creds.uid = geteuid();
     msg->creds.gid = getegid();
+    /* Validate flags */
+    if (flags & ~COMM_DONTWAIT) {
+        errno = EINVAL;
+        return -1;
+    }
     /* Assemble message into buffer */
     for (i = 0; i < msg->fieldnum; i++) {
         int l = strlen(msg->fields[i]) + 1;
@@ -217,7 +233,7 @@ int comm_send(int fd, struct ctlmsg *msg, struct addr *addr) {
     hdr.msg_iovlen = 1;
     hdr.msg_control = credbuf;
     hdr.msg_controllen = CMSG_SPACE(sizeof(struct ucred));
-    hdr.msg_flags = 0;
+    hdr.msg_flags = (flags & COMM_DONTWAIT) ? MSG_DONTWAIT : 0;
     /* Populate ancillary messages */
     cmsg = CMSG_FIRSTHDR(&hdr);
     cmsg->cmsg_len = CMSG_LEN(sizeof(struct ucred));
@@ -234,18 +250,22 @@ int comm_send(int fd, struct ctlmsg *msg, struct addr *addr) {
         memcpy(CMSG_DATA(cmsg), msg->fds, sizeof(msg->fds));
     }
     /* Send message */
-    return sendmsg(fd, &hdr, 0);
+    ret = sendmsg(fd, &hdr, 0);
+    if (ret == -1 && flags & COMM_DONTWAIT && (errno == EAGAIN ||
+        errno == EWOULDBLOCK)) return -2;
+    return ret;
 }
 
 /* Send an error message */
-int comm_senderr(int fd, char *errcode, char *errmsg, struct addr *addr) {
+int comm_senderr(int fd, char *errcode, char *errmsg, struct addr *addr,
+                 int flags) {
     /* Prepare message */
     char *fields[] = { "", errcode, errmsg };
     struct ctlmsg msg = CTLMSG_INIT;
     msg.fieldnum = 3;
     msg.fields = fields;
     /* Deliver message */
-    return comm_send(fd, &msg, addr);
+    return comm_send(fd, &msg, addr, flags);
 }
 
 /* Common address preparation */

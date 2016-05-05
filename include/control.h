@@ -28,6 +28,7 @@
  * creds  : (struct ucred) Credentials of the process to submit the request.
  * fds    : (int [3]) A set of file descriptors to pass to the script.
  * addr   : (struct addr) The address to send replies to.
+ * cflags : (int) Flags to pass to the comm_*() functions.
  * reply  : (int) Whether this request should be replied to. Mostly for
  *          internal use; defaults to 1. */
 struct request {
@@ -38,6 +39,7 @@ struct request {
     struct ucred creds;
     int fds[3];
     struct addr addr;
+    int cflags;
     int reply;
 };
 
@@ -48,7 +50,7 @@ struct request {
  * an error of 0 ("Success") is raised.
  * Returns a pointer to the request structure, or NULL on failure. */
 struct request *request_new(struct config *config, struct ctlmsg *msg,
-                            struct addr *addr);
+                            struct addr *addr, int flags);
 
 /* Verify that the credentials given in the request are authorized to
  * perform the requested action
@@ -81,18 +83,20 @@ int run_jobs(struct config *config, int pid, int retcode);
 /* Send a request to perform an action as specified in the argument list
  * argv is expected to contain the actual values to send, consisting of a
  * protocol-level command and of its parameters.
+ * flags are passed to the comm_*() functions.
  * Invalid actions are filtered out. Returns a positive number on success,
  * zero if the argument list is invalid (most notably by being too short,
  * too long, or by containing an invalid action), or -1 on fatal error. */
-int send_request(struct config *config, char **argv);
+int send_request(struct config *config, char **argv, int flags);
 
 /* Wait for a message to arrive and return the desired return code
+ * flags are passed to the comm_*() functions.
  * The return value is either the return code (if everything succeeds), which
  * can be in the range [-255..255], or the constant REPLY_ERROR if a fatal
  * error happened, with errno set properly. In the latter case, errno may
  * by zero ("Success"), indicating that an error message was received and
  * written to standard error. */
-int get_reply(struct config *config);
+int get_reply(struct config *config, int flags);
 
 /* Close all file descriptors not less than minfd */
 int close_from(int minfd);

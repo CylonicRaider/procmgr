@@ -25,6 +25,10 @@
 /* Empty initializer for a struct ctlmsg */
 #define CTLMSG_INIT { 0, NULL, { -1, -1, -1 }, { -1, -1, -1 } }
 
+/* Do not wait on this call; suppress EAGAIN or EWOULDBLOCK-s on the server
+ * side */
+#define COMM_DONTWAIT 1
+
 /* A communication message
  * Members:
  * fieldnum: (int) Amount of strings this message incorporates.
@@ -83,29 +87,36 @@ int comm_connect(struct config *conf);
  * is filled with -1's.
  * If addr is not NULL, the address where the message originates from is
  * stored in there.
+ * flags contains the OR of any amount of COMM_* constants. COMM_DONTWAIT
+ * reads a message in non-blocking mode, if there is none, -2 is returned.
  * Returns the amount of bytes received (which may be zero), -2 if an invalid
  * message was received (having replied with an error messgae; it is the
  * caller's obligation to restart the call if desired), or -1 on error, with
- * errno set.
+ * errno set (including EINVAL on invalid flags).
  * NOTE that a maximum length of MSG_MAXLEN is enforced; messages longer than
  *      that are rejected and an error message is sent. */
-int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr);
+int comm_recv(int fd, struct ctlmsg *msg, struct addr *addr, int flags);
 
 /* Send a message through the communication socket
  * The creds member of msg is filled in, regardless of whether the call fails
  * or not. If all elements of the fds member of msg are not -1, they are sent
  * along with the message.
  * addr (if not NULL) specifies the peer to send the message to.
- * Returns the amount of bytes sent, or -1 on error, with errno set.
+ * flags contains the OR of any amount of COMM_* constants. COMM_DONTWAIT
+ * attempts to write a message in non-blocking mode, returning -2 if an
+ * EAGAIN or EWOULDBLOCK happened.
+ * Returns the amount of bytes sent, or -1 on error, with errno set
+ * (including EINVAL on invalid flags).
  * NOTE that the maximum message length (of MSG_MAXLEN) is enforced as well;
  *      attempts to send longer messages are rejected with an E2BIG. */
-int comm_send(int fd, struct ctlmsg *msg, struct addr *addr);
+int comm_send(int fd, struct ctlmsg *msg, struct addr *addr, int flags);
 
 /* Send an error message
  * The code and description are packed into an error message as described
  * above and sent over the given file descriptor.
- * See comm_send() for the semantics of addr.
+ * See comm_send() for the semantics of addr and flags.
  * Returns the amount of bytes send, or -1 on error, with errno set. */
-int comm_senderr(int fd, char *errcode, char *errdesc, struct addr *addr);
+int comm_senderr(int fd, char *errcode, char *errdesc, struct addr *addr,
+                 int flags);
 
 #endif
