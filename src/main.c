@@ -252,7 +252,8 @@ int server_main(struct config *config, int background, char *argv[]) {
                         perror("Failed to send message");
                         goto commerr;
                     }
-                } else if (msg.creds.uid != 0) {
+                } else if (msg.creds.uid != 0 &&
+                           msg.creds.uid != geteuid()) {
                     if (comm_senderr(config->socket, "EPERM",
                                      "Permission denied", &addr,
                                      COMM_DONTWAIT) == -1) {
