@@ -19,7 +19,7 @@ Command-line usage
 ==================
 
 
-``USAGE: procmgr [-h|-V] [-c conffile] [-d [-f]|-t|-s|-r] [program action
+**Usage**: ``procmgr [-h|-V] [-c conffile] [-d [-f]|-t|-s|-r] [program action
 [args ...]]``
 
 ========================= ===================================================
