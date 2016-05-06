@@ -13,6 +13,13 @@
 #include "comm.h"
 #include "config.h"
 
+/* Do not reply to this request */
+#define REQUEST_NOREPLY 1
+/* Drop if (the program) has to run */
+#define REQUEST_DIHTR 2
+/* Drop if (the program) has not to run */
+#define REQUEST_DIHNTR 4
+
 /* get_reply() encountered an error */
 #define REPLY_ERROR 65535
 
@@ -29,8 +36,7 @@
  * fds    : (int [3]) A set of file descriptors to pass to the script.
  * addr   : (struct addr) The address to send replies to.
  * cflags : (int) Flags to pass to the comm_*() functions.
- * reply  : (int) Whether this request should be replied to. Mostly for
- *          internal use; defaults to 1. */
+ * flags  : (int) Bitwise OR of zero, one, or more REQUEST_* constants. */
 struct request {
     struct config *config;
     struct program *program;
@@ -40,7 +46,7 @@ struct request {
     int fds[3];
     struct addr addr;
     int cflags;
-    int reply;
+    int flags;
 };
 
 /* Create a request from the given message
@@ -51,6 +57,7 @@ struct request {
  * A reference to the program mentioned is kept by the request; file
  * descriptors passed along with msg are "stolen" from it (so that
  * they would not be deleted with the message).
+ * The flags member is initially zero.
  * Returns a pointer to the request structure, or NULL on failure. */
 struct request *request_new(struct config *config, struct ctlmsg *msg,
                             struct addr *addr, int flags);
@@ -58,7 +65,7 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
 /* Create a "synthetic" request
  * The action is resolved automatically from the program; the credentials and
  * the additional file descriptors are set to -1; addr's length is zero;
- * cflags are zero since no communication happens; reply is zero.
+ * cflags are zero since no communication happens; flags is REQUEST_NOREPLY.
  * NOTE that the request will not pass request_validate().
  * Returns the newly allocated structure, or NULL on failure. */
 struct request *request_synth(struct config *config, struct program *prog,
@@ -80,7 +87,8 @@ int request_validate(struct request *request);
 struct job *request_schedule(struct request *request, double notBefore);
 
 /* Perform the given action
- * Might perform immediately, or submit a job to the configuration's queue.
+ * Might submit additional jobs to the configuration's queue, and (the entire
+ * action) might finish asynchronously.
  * Returns the PID of the process spawned (if any), 0 if none, or -1 on
  * error, with errno either set to 0 ("Success") on a non-fatal error, or
  * otherwise on a fatal one. */

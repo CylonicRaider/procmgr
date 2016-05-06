@@ -86,7 +86,7 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
     ret->fds[2] = msg->fds[2];
     ret->addr = *addr;
     ret->cflags = flags;
-    ret->reply = 1;
+    ret->flags = 0;
     msg->fds[0] = -1;
     msg->fds[1] = -1;
     msg->fds[2] = -1;
@@ -127,6 +127,7 @@ struct request *request_synth(struct config *config, struct program *prog,
     ret->creds.pid = -1;
     ret->creds.uid = -1;
     ret->creds.gid = -1;
+    ret->flags = REQUEST_NOREPLY;
     return ret;
     /* An error occurred */
     error:
@@ -165,6 +166,12 @@ int request_run(struct request *request) {
     struct request *req = NULL;
     struct job *job;
     int ret = 0;
+    /* Discard request if necessary */
+    if (prog->flags & PROG_RUNNING) {
+        if (request->flags & REQUEST_DIHTR) return 0;
+    } else {
+        if (request->flags & REQUEST_DIHNTR) return 0;
+    }
     /* Check for state validity */
     if (prog->pid != -1) {
         if (request->action == prog->act_start) {
@@ -210,7 +217,7 @@ int request_run(struct request *request) {
             /* "exec" different action using this request */
             request->action = prog->act_stop;
             request->argv = NULL;
-            request->reply = 0;
+            request->flags |= REQUEST_NOREPLY;
             res = request_run(request);
             if (res == -1) goto error;
             /* Dispatch follow-up action */
@@ -224,7 +231,7 @@ int request_run(struct request *request) {
             return request_run(request);
         } else if (request->action == prog->act_signal) {
             /* Do nothing */
-            if (! request->reply) return 0;
+            if (request->flags & REQUEST_NOREPLY) return 0;
             return (request_reply(request->config->socket, &request->addr,
                                   request->cflags, 0)) ? 0 : -1;
         } else if (request->action == prog->act_stop) {
@@ -308,7 +315,7 @@ int request_run(struct request *request) {
     }
     /* Only falling through here if we want to wait on something ->
      * Schedule waiter */
-    if (request->reply) {
+    if (! (request->flags & REQUEST_NOREPLY)) {
         int stopping = (request->action == prog->act_stop);
         if (! submit_waiter(request, (stopping) ? prog->pid : ret))
             return -1;

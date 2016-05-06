@@ -197,6 +197,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                                 perror("Failed to allocate request");
                                 goto commerr;
                             }
+                            req->flags |= REQUEST_DIHNTR;
                             if (! request_schedule(req, timestamp() +
                                                 prog->delay)) {
                                 request_free(req);
