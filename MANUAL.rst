@@ -18,37 +18,38 @@ action.
 Command-line usage
 ==================
 
-::
 
-    USAGE: procmgr [-h|-V] [-c conffile] [-d [-f]|-t|-s|-r]
-                   [program action [args ...]]
-    -h: (--help) This help
-    -V: (--version) Print version (v1.0)
-    -c: (--config) Configuration file location (defaults to environment
-        variable PROCMGR_CONFFILE, or to /etc/procmgr.cfg if not
-        set)
-    -d: (--daemon) Start daemon (as opposed to the default "client"
-        mode)
-    -f: (--foreground) Stay in foreground (daemon mode only)
-    -t: (--test) Check whether the daemon is running
-    -s: (--stop) Signal the daemon (if any running) to stop
-    -r: (--reload) Signal the daemon (if any running) to reload its
-        configuration
-    If none of -dftsr are supplied, program and action must be present,
-    and contain the program and action to invoke; additional command-line
-    arguments may be passed to those.
+``USAGE: procmgr [-h|-V] [-c conffile] [-d [-f]|-t|-s|-r] [program action
+[args ...]]``
 
-(``/etc/procmgr.cfg`` is specified by the ``DEFAULT_CONFFILE`` compile-time
-constant.)
+========================= ===================================================
+``-h`` (``--help``)       This help.
+``-V`` (``--version``)    Print version
+``-c`` (``--config``)     Configuration file location (defaults to
+                          environment variable ``PROCMGR_CONFFILE``, or to
+                          the compile-time constant ``DEFAULT_CONFFILE``,
+                          which defaults to ``/etc/procmgr.cfg``).
+``-d`` (``--daemon``)     Start daemon (as opposed to the default "client"
+                          mode).
+``-f`` (``--foreground``) Stay in foreground (daemon mode only).
+``-t`` (``--test``)       Check whether the daemon is running.
+``-s`` (``--stop``)       Signal the daemon (if any running) to stop.
+``-r`` (``--reload``)     Signal the daemon (if any running) to reload its
+                          configuration.
+========================= ===================================================
+
+If none of ``-dftsr`` are supplied, ``program`` and ``action`` must be
+present, and contain the program and action to invoke; additional
+command-line arguments may be passed to those.
 
 Configuration
 =============
 
 To load configuration data, a derivate of the ``.ini`` format is used; all
-values described are optional, although leaving some out would be unwise.
-The order of declarations does not matter (apart from global values, which
-must be specified before any section not to be taken as part of that
-section).
+values described are optional, although leaving some (*i.e.*, ``cmd-start``;
+see Actions_) out would be unwise. The order of declarations does not matter
+(apart from global values, which must be specified before any section not to
+be taken as part of that section).
 
 ::
 
@@ -109,12 +110,14 @@ streams are connected to those of the client that caused the action.
             Since procmgr cannot really know how to start some arbitrary
             program, there is no default action, and trying to start a
             program without a script for this action will fail.
+
 ``restart`` **Restart the program.** Similarly to ``start``, the program's
             PID is updated to the PID of the script; the client does not wait
             for the script to exit (again). See also the ``stop`` action.
 
             The default action is to ``stop`` the program and to ``start`` it
             again.
+
 ``reload``  **Reload the program's configuration.** For programs that support
             that, this can cause the program to reload its configuration
             without downtime, if properly configured. The client waits for
@@ -123,11 +126,13 @@ streams are connected to those of the client that caused the action.
 
             The default action is to ``restart`` the program, assuming that
             it does not support on-line reloading.
+
 ``signal``  **Arbitrary user-defined action.** This does not have any
             semantical binding; the script may do whatever it wishes.
 
             The default action is not to do anything and to return a success
             status.
+
 ``stop``    **Stop the program.** The script can use the ``PID`` environment
             variable to check which process to signal. Instead of waiting for
             the script to finish, procmgr will wait for the *program* to exit
@@ -135,6 +140,7 @@ streams are connected to those of the client that caused the action.
 
             The default action is to send the currently-running process a
             ``SIGTERM`` signal.
+
 ``status``  **Check the program's status.** The script should print a short
             message and return an exit code depending on whether the program
             is running or not.
@@ -154,9 +160,9 @@ commands. The environment is empty, save for the following variables:
 
 ============ ================================================================
 ``PATH``     The path to get executables from. All other ones must be fetched
-             by absolute path. Equal to the ACTION_PATH compile-time
+             by absolute path. Equal to the ``ACTION_PATH`` compile-time
              constant.
-``SHELL``    The shell used to run the command. Equal to the ACTION_SHELL
+``SHELL``    The shell used to run the command. Equal to the ``ACTION_SHELL``
              compile-time constant.
 ``PROGNAME`` The name of the current program.
 ``ACTION``   The name of the action being executed now.
