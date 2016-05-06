@@ -7,8 +7,13 @@ Introduction
 
 This describes the use and configuration of |procmgr|_.
 
-``procmgr`` is a *process manager*, similar to ``init(1)``. It allows
-managing processes by invoking certain user-defined actions_.
+procmgr is a *process manager*, similar to ``init(1)``. It allows managing
+processes by invoking certain user-defined actions_.
+
+The actual process management happens by a daemon running in the background;
+to invoke actions, a client (embedded in the same executable) connects to
+the daemon via a UNIX domain socket and sends a request to perform a certain
+action.
 
 Command-line usage
 ==================
