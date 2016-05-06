@@ -35,7 +35,7 @@ const char *HELP =
     "-s: (--stop) Signal the daemon (if any running) to stop\n"
     "-r: (--reload) Signal the daemon (if any running) to reload its\n"
     "    configuration\n"
-    "If no of -dftsr are supplied, program and action must be present,\n"
+    "If none of -dftsr are supplied, program and action must be present,\n"
     "and contain the program and action to invoke; additional command-line\n"
     "arguments may be passed to those.\n";
 

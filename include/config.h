@@ -22,7 +22,7 @@
  *     gid-<action> = <GID to allow to perform this action>
  *     restart-delay = <seconds after which approximately to restart>
  *
- * For the UID and GID fields, and resart-delay, the special value "none"
+ * For the UID and GID fields, and restart-delay, the special value "none"
  * (which is equal to -1) may be used, indicating that no UID/GID should be
  * allowed to perform an action, or that the program should not be
  * automatically restarted (as it happens for every non-positive value of
