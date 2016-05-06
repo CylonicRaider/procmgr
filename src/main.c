@@ -21,7 +21,7 @@
 
 /* Usage and help */
 const char *USAGE = "USAGE: " PROGNAME " [-h|-V] [-c conffile] [-d "
-    "[-f]|-t|-s|-r]\n";
+    "[-f]|-t|-s|-r] [program action [args ...]]\n";
 const char *HELP =
     "-h: (--help) This help\n"
     "-V: (--version) Print version (" VERSION ")\n"
@@ -34,7 +34,10 @@ const char *HELP =
     "-t: (--test) Check whether the daemon is running\n"
     "-s: (--stop) Signal the daemon (if any running) to stop\n"
     "-r: (--reload) Signal the daemon (if any running) to reload its\n"
-    "    configuration\n";
+    "    configuration\n"
+    "If no of -dftsr are supplied, program and action must be present,\n"
+    "and contain the program and action to invoke; additional command-line\n"
+    "arguments may be passed to those.\n";
 
 /* Global data for signal handlers */
 static int sigpipe[2] = { -1, -1 };
@@ -381,6 +384,10 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
         data[0] = cmd;
         data[1] = param;
         data[2] = NULL;
+        if (argv && *argv) {
+            fprintf(stderr, "Excess arguments on command line\n");
+            return 2;
+        }
     }
     /* Connect */
     if (comm_connect(config) == -1) {
