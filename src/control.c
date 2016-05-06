@@ -290,7 +290,12 @@ int request_run(struct request *request) {
         /* Spawn child process */
         ret = fork();
         if (ret == 0) {
-            /* In child: configure file descriptors */
+            /* In child: open a new process group */
+            if (setpgid(0, 0) == -1) {
+                perror("setpgid");
+                _exit(126);
+            }
+            /* Configure file descriptors */
             setup_fds(request);
             /* exec() script */
             execve(argv[0], argv, envp);
