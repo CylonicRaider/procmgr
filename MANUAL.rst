@@ -152,7 +152,7 @@ streams are connected to those of the client that caused the action.
 =========== =================================================================
 
 Action execution
-================
+----------------
 
 Actions commands are run by ``ACTION_SHELL`` (``/bin/sh``), appended after
 a ``-c`` parameter; additional positional arguments are passed after
