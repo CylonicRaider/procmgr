@@ -124,8 +124,8 @@ streams are connected to those of the client that caused the action.
             the script (if any) to exit, and exits with the script's exit
             status.
 
-            The default action is to ``restart`` the program, assuming that
-            it does not support on-line reloading.
+            The default action is to ``restart`` the program, under the
+            assumption that it does not support on-line reloading.
 
 ``signal``  **Arbitrary user-defined action.** This does not have any
             semantical binding; the script may do whatever it wishes.
@@ -170,10 +170,11 @@ commands. The environment is empty, save for the following variables:
              string if none.
 ============ ================================================================
 
-For an action to be allowed, either the UID or the GID specified must match
-the UID or GID sent by the client (the built-in client sends the EUID and the
-EGID of its process), respectively, or the client must have an EUID of 0
-(*i.e.*, be root).
+For an action to be allowed, either the UID or the GID specified in the
+configuration must match the UID or GID sent by the client (the built-in
+client sends the EUID and the EGID of its process, but this cannot be
+enforced), respectively, or the client must have an EUID of 0 (*i.e.*, be
+root).
 
 .. [1] Each script is run in an own process group, if that matters.
 
