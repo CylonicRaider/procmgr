@@ -202,7 +202,6 @@ int request_run(struct request *request) {
                 errno = 0;
             return -1;
         } else if (request->action == prog->act_restart) {
-            int res;
             /* Clone request */
             struct request *req = calloc(1, sizeof(struct request));
             if (! dupfd(request->fds[0], &req->fds[0])) goto error;
@@ -214,17 +213,17 @@ int request_run(struct request *request) {
             req->argv = request->argv;
             req->creds = request->creds;
             req->addr = request->addr;
-            /* "exec" different action using this request */
+            /* Call another action using this request */
             request->action = prog->act_stop;
             request->argv = NULL;
             request->flags |= REQUEST_NOREPLY;
-            res = request_run(request);
-            if (res == -1) goto error;
+            ret = request_run(request);
+            if (ret == -1) goto error;
             /* Dispatch follow-up action */
             job = request_schedule(req, NAN);
             if (! job) goto error;
-            if (res) job->waitfor = res;
-            return 0;
+            if (ret) job->waitfor = ret;
+            return ret;
         } else if (request->action == prog->act_reload) {
             /* Restart program */
             request->action = prog->act_restart;
