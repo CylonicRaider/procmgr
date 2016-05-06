@@ -406,6 +406,14 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
         } else {
             res = 1;
         }
+    } else if (action == TEST) {
+        if (res == 0) {
+            printf("running\n");
+            fflush(stdout);
+        } else {
+            printf("experiencing problems\n");
+            fflush(stdout);
+        }
     }
     return res;
 }
