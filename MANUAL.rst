@@ -176,6 +176,13 @@ client sends the EUID and the EGID of its process, but this cannot be
 enforced), respectively, or the client must have an EUID of 0 (*i.e.*, be
 root).
 
+.. note:: Since only the "primary" group of a process is sent (and *can* be
+   sent), it might be necessary to change the primary group of the client
+   process to make use of it; use the ``sg`` UNIX utility for that.
+
+   For example, if user ``johndoe`` was member of the ``wheel`` group, he
+   could use ``sg wheel procmgr ...`` to obtain the ``wheel`` group.
+
 .. [1] Each script is run in an own process group, if that matters.
 
 .. |procmgr| replace:: ``procmgr``
