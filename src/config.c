@@ -31,11 +31,6 @@ struct config *config_new(struct conffile *file, int quiet) {
         if (! quiet) perror("Error while allocating structure");
         return NULL;
     }
-    ret->socketpath = strdup(SOCKET_PATH);
-    if (! ret->socketpath) {
-        if (! quiet) perror("Failed to allocate string");
-        goto error;
-    }
     ret->jobs = jobqueue_new();
     if (! ret->jobs) {
         if (! quiet) perror("Failed to allocate memory");
@@ -108,7 +103,7 @@ int config_update(struct config *conf, int quiet) {
         }
     }
     /* Reset global members */
-    if (! conf->socketpath || strcmp(conf->socketpath, SOCKET_PATH) == 0) {
+    if (! conf->socketpath || strcmp(conf->socketpath, SOCKET_PATH) != 0) {
         free(conf->socketpath);
         conf->socketpath = strdup(SOCKET_PATH);
         if (! conf->socketpath) {

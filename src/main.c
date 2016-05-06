@@ -187,26 +187,25 @@ int server_main(struct config *config, int background, char *argv[]) {
                     } else {
                         continue;
                     }
+                    /* Obtain program */
+                    prog = config_getpid(config, pid);
+                    if (prog) prog->pid = -1;
                     /* Run jobs */
                     run_jobs(config, pid, retcode);
                     /* Restart automatically, if applicable */
-                    prog = config_getpid(config, pid);
-                    if (prog) {
-                        prog->pid = -1;
-                        if (prog->delay > 0) {
-                            struct request *req = request_synth(config, prog,
-                                "start", NULL);
-                            if (! req) {
-                                perror("Failed to allocate request");
-                                goto commerr;
-                            }
-                            req->flags |= REQUEST_DIHNTR;
-                            if (! request_schedule(req, timestamp() +
-                                                prog->delay)) {
-                                request_free(req);
-                                perror("Failed to schedule request");
-                                goto commerr;
-                            }
+                    if (prog && prog->delay > 0) {
+                        struct request *req = request_synth(config, prog,
+                            "start", NULL);
+                        if (! req) {
+                            perror("Failed to allocate request");
+                            goto commerr;
+                        }
+                        req->flags |= REQUEST_DIHNTR;
+                        if (! request_schedule(req, timestamp() +
+                                            prog->delay)) {
+                            request_free(req);
+                            perror("Failed to schedule request");
+                            goto commerr;
                         }
                     }
                 }
@@ -378,7 +377,7 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
             return 1;
         }
         data[0] = cmd;
-        if (argv) memcpy(data + 1, argv, l * sizeof(char *));
+        if (argv) memcpy(data + 1, argv, (l - 2) * sizeof(char *));
     } else {
         data = buf;
         data[0] = cmd;

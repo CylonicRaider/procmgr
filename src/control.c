@@ -222,7 +222,7 @@ int request_run(struct request *request) {
             /* Dispatch follow-up action */
             job = request_schedule(req, NAN);
             if (! job) goto error;
-            if (ret) job->waitfor = ret;
+            job->waitfor = prog->pid;
             return ret;
         } else if (request->action == prog->act_reload) {
             /* Restart program */
@@ -401,9 +401,7 @@ int send_request(struct config *config, char **argv, int flags) {
     /* Allocate data */
     msg.fields = calloc(msg.fieldnum, sizeof(char *));
     if (! msg.fields) return -1;
-    for (i = 0; i < msg.fieldnum; i++) {
-        msg.fields[i] = argv[i];
-    }
+    memcpy(msg.fields, argv, msg.fieldnum * sizeof(char *));
     /* Fill in fields */
     msg.fds[0] = STDIN_FILENO;
     msg.fds[1] = STDOUT_FILENO;
