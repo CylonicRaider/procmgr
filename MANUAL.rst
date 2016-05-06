@@ -2,8 +2,8 @@
 procmgr User's Manual
 =====================
 
-Abstract
-========
+Introduction
+============
 
 This describes the use and configuration of |procmgr|_.
 
@@ -29,9 +29,11 @@ Command-line usage
     -s: (--stop) Signal the daemon (if any running) to stop
     -r: (--reload) Signal the daemon (if any running) to reload its
         configuration
-    If no of -dftsr are supplied, program and action must be present,
+    If none of -dftsr are supplied, program and action must be present,
     and contain the program and action to invoke; additional command-line
     arguments may be passed to those.
+
+(``etc/procmgr.cfg`` is specified by the ``DEFAULT_CONFFILE`` constant.)
 
 Configuration
 =============
@@ -56,7 +58,7 @@ section).
     gid-<action> = <GID to allow to perform this action>
     restart-delay = <seconds after which approximately to restart>
 
-For the UID and GID fields, and resart-delay, the special value "none"
+For the UID and GID fields, and ``restart-delay``, the special value ``none``
 (which is equal to -1) may be used, indicating that no UID/GID should be
 allowed to perform an action, or that the program should not be
 automatically restarted (as it happens for every non-positive value of
@@ -86,8 +88,8 @@ Actions
 -------
 
 Actions commands are run by ``ACTION_SHELL`` (``/bin/sh``), appended after
-a "-c" parameter; additional positional arguments are passed after commands.
-The execution environment is empty, save for the following variables::
+a ``-c`` parameter; additional positional arguments are passed after
+commands. The environment is empty, save for the following variables::
 
     PATH     -- The path to get executables from. All other ones must be
                 fetched by absolute path. Equal to the ACTION_PATH constant.
@@ -98,13 +100,14 @@ The execution environment is empty, save for the following variables::
     PID      -- The PID of the process of the current program, or the empty
                 string if none.
 
-The PID of the process that is running the "start" and "restart" actions
+The PID of the process that is running the ``start`` and ``restart`` actions
 is recorded as the PID of the program as a whole; thus, the command for
-these actions should preferably exec() the actual service to be run.
+these actions should preferably ``exec`` the actual service to be run.
 
-For an action to be allowed, either the UID or the GID must match the EUID or
-EGID of the caller, respectively, or the caller must have an EUID of 0 (i.e.,
-be root).
+For an action to be allowed, either the UID or the GID specified must match
+the UID or GID sent by the client (the built-in client sends the EUID and the
+EGID of its process), respectively, or the client must have an EUID of 0
+(*i.e.*, be root).
 
 .. |procmgr| replace:: ``procmgr``
 .. _procmgr: https://github.com/CylonicRaider/procmgr
