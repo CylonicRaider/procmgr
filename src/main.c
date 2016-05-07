@@ -43,7 +43,7 @@ const char *HELP =
     "    configuration\n"
     "If none of -dftsr are supplied, program and action must be present,\n"
     "and contain the program and action to invoke; additional command-line\n"
-    "arguments may be passed to those. If no -L option is specified,\n"
+    "arguments may be passed to those. If no -l option is specified,\n"
     "nothing is logged (except fatal messages, which are always copied to\n"
     "(at least) stderr). Logging happens only in server mode, in client\n"
     "mode, messages are written to stderr.\n";

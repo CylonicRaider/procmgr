@@ -48,7 +48,7 @@ If none of ``-dftsr`` are supplied, ``program`` and ``action`` must be
 present, and contain the program and action to invoke; additional
 command-line arguments may be passed to those.
 
-If no ``-L`` option is specified, nothing is logged (except fatal messages,
+If no ``-l`` option is specified, nothing is logged (except fatal messages,
 which are always copied to (at least) stderr). Logging happens only in server
 mode, in client mode, messages are written to stderr (and the settings are
 ignored).
