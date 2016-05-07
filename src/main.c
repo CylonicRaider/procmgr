@@ -32,8 +32,8 @@ const char *HELP =
     "    set)\n"
     "-l: (--log log) Syslog facility to log to, or the string \"stderr\".\n"
     "    Facility keywords override each other, \"stderr\" is a flag.\n"
-    "-L: (--level level) Minimum severity of messages to log. level is one\n"
-    "    of DEBUG, INFO, NOTE (default), WARN, ERROR, CRITICAL, FATAL.\n"
+    "-L: (--loglevel level) Minimum severity of messages to log. level is\n"
+    "    one of DEBUG, INFO, NOTE (default), WARN, ERROR, CRITICAL, FATAL.\n"
     "-d: (--daemon) Start daemon (as opposed to the default \"client\"\n"
     "    mode)\n"
     "-f: (--foreground) Stay in foreground (daemon mode only)\n"
@@ -493,7 +493,7 @@ int main(int argc, char *argv[]) {
                 } else {
                     logfacility = val;
                 }
-            } else if (strcmp(arg, "level") == 0) {
+            } else if (strcmp(arg, "loglevel") == 0) {
                 logslevel = getarg(&opts, 0);
                 if (! arg) {
                     fprintf(stderr, "Missing required argument for '--%s'\n",

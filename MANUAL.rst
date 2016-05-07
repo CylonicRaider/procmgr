@@ -19,16 +19,22 @@ Command-line usage
 ==================
 
 
-**Usage**: ``procmgr [-h|-V] [-c conffile] [-d [-f]|-t|-s|-r] [program action
-[args ...]]``
+**Usage**: ``procmgr [-h|-V] [-c conffile] [-l log] [-L level]
+[-d [-f]|-t|-s|-r] [program action [args ...]]``
 
 ========================= ===================================================
 ``-h`` (``--help``)       This help.
 ``-V`` (``--version``)    Print version
-``-c`` (``--config``)     Configuration file location (defaults to
+``-c`` (``--config``)     Configuration file location (defaults to the
                           environment variable ``PROCMGR_CONFFILE``, or to
                           the compile-time constant ``DEFAULT_CONFFILE``,
                           which defaults to ``/etc/procmgr.cfg``).
+``-l`` (``--log``)        Syslog facility to log to, or the string
+                          ``stderr``. Facility keywords override each other,
+                          ``stderr`` is a set-only flag.
+``-L`` (``--loglevel``)   Minimum severity of messages to log. ``level`` is
+                          one of ``DEBUG``, ``INFO``, ``NOTE`` (the default),
+                          ``WARN``, ``ERROR``, ``CRITICAL``, or ``FATAL``.
 ``-d`` (``--daemon``)     Start daemon (as opposed to the default "client"
                           mode).
 ``-f`` (``--foreground``) Stay in foreground (daemon mode only).
@@ -41,6 +47,11 @@ Command-line usage
 If none of ``-dftsr`` are supplied, ``program`` and ``action`` must be
 present, and contain the program and action to invoke; additional
 command-line arguments may be passed to those.
+
+If no ``-L`` option is specified, nothing is logged (except fatal messages,
+which are always copied to (at least) stderr). Logging happens only in server
+mode, in client mode, messages are written to stderr (and the settings are
+ignored).
 
 Configuration
 =============
