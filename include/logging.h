@@ -10,6 +10,8 @@
 #ifndef _LOGGING_H
 #define _LOGGING_H
 
+#include <syslog.h>
+
 /* Syslog configuration
  * For details on the members, see the manual of openlog(3).
  * Members:
@@ -29,13 +31,14 @@ enum loglevel { DEBUG, INFO, NOTE, WARN, ERROR, CRITICAL, FATAL };
 
 /* Initialize logging
  * fp is a file to write logging messages to, syslog is either NULL or
- * contains configuration parameters for syslog initialization.
+ * contains configuration parameters for syslog initialization; level
+ * is the minimum level of messages to log.
  * The data passed is stored statically; it is never deallocated (so,
  * the caller should take care of disposing of the structures when they
  * are not needed).
  * Returns zero in case of success, or -1 on failure (with errno set
  * appropriately, although no error conditions are known as of now). */
-int initlog(FILE *fp, struct logging_syslog *syslog);
+int initlog(FILE *fp, struct logging_syslog *syslog, int level);
 
 /* Log the string
  * level is one of the LEVEL_* constants. */
@@ -48,5 +51,11 @@ void logerr(int level, char *message);
 
 /* De-initialize the logging machinery */
 void quitlog(void);
+
+/* Obtain the logging level for the given keyword, or -1 if none */
+int loglevel(char *name);
+
+/* Obtain the syslog facility corresponding to name, or -1 if none */
+int facility(char *name);
 
 #endif

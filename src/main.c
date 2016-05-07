@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <sys/select.h>
 #include <sys/time.h>
@@ -16,18 +17,23 @@
 
 #include "argparse.h"
 #include "control.h"
+#include "logging.h"
 #include "main.h"
 #include "util.h"
 
 /* Usage and help */
-const char *USAGE = "USAGE: " PROGNAME " [-h|-V] [-c conffile] [-d "
-    "[-f]|-t|-s|-r] [program action [args ...]]\n";
+const char *USAGE = "USAGE: " PROGNAME " [-h|-V] [-c conffile] [-l log] [-L "
+    "level] [-d [-f]|-t|-s|-r] [program action [args ...]]\n";
 const char *HELP =
     "-h: (--help) This help\n"
     "-V: (--version) Print version (" VERSION ")\n"
     "-c: (--config) Configuration file location (defaults to environment\n"
     "    variable PROCMGR_CONFFILE, or to " DEFAULT_CONFFILE " if not\n"
     "    set)\n"
+    "-l: (--log log) Syslog facility to log to, or the string \"stderr\".\n"
+    "    Facility keywords override each other, \"stderr\" is a flag.\n"
+    "-L: (--level level) Minimum severity of messages to log. level is one\n"
+    "    of DEBUG, INFO, NOTE (default), WARN, ERROR, CRITICAL, FATAL.\n"
     "-d: (--daemon) Start daemon (as opposed to the default \"client\"\n"
     "    mode)\n"
     "-f: (--foreground) Stay in foreground (daemon mode only)\n"
@@ -37,7 +43,10 @@ const char *HELP =
     "    configuration\n"
     "If none of -dftsr are supplied, program and action must be present,\n"
     "and contain the program and action to invoke; additional command-line\n"
-    "arguments may be passed to those.\n";
+    "arguments may be passed to those. If no -L option is specified,\n"
+    "nothing is logged (except fatal messages, which are always copied to\n"
+    "(at least) stderr). Logging happens only in server mode, in client\n"
+    "mode, messages are written to stderr.\n";
 
 /* Global data for signal handlers */
 static int sigpipe[2] = { -1, -1 };
@@ -130,6 +139,7 @@ int server_main(struct config *config, int background, char *argv[]) {
     }
     /* Final preparations */
     FD_ZERO(&readfds);
+    logmsg(NOTE, PROGNAME " started");
     /* Main loop */
     for (;;) {
         int nfds, res;
@@ -147,7 +157,7 @@ int server_main(struct config *config, int background, char *argv[]) {
             if (errno == EINTR) {
                 FD_ZERO(&readfds);
             } else {
-                perror("Failed to select()");
+                logerr(FATAL, "Failed to select()");
                 return 1;
             }
         }
@@ -155,15 +165,18 @@ int server_main(struct config *config, int background, char *argv[]) {
         if (FD_ISSET(sigpipe[0], &readfds)) {
             unsigned char signo;
             if (read(sigpipe[0], &signo, 1) != 1) {
-                perror("Failed to read");
+                logerr(FATAL, "Failed to read");
                 return 1;
             }
             /* Act upon them */
             if (signo == SIGHUP) {
                 /* Reload configuration */
+                logmsg(NOTE, "Reloading configuration...");
                 config_update(config, 0);
+                logmsg(INFO, "Done");
             } else if (signo == SIGINT || signo == SIGTERM) {
                 /* Shut down */
+                logmsg(WARN, "Exiting!");
                 break;
             } else if (signo == SIGCHLD) {
                 int pid, status, retcode;
@@ -174,7 +187,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                     pid = waitpid(-1, &status, WNOHANG);
                     if (pid == -1) {
                         if (errno == ECHILD) break;
-                        perror("wait() failed");
+                        logerr(FATAL, "wait() failed");
                         return 1;
                     } else if (pid == 0) {
                         break;
@@ -189,7 +202,14 @@ int server_main(struct config *config, int background, char *argv[]) {
                     }
                     /* Obtain program */
                     prog = config_getpid(config, pid);
-                    if (prog) prog->pid = -1;
+                    if (prog) {
+                        char msgbuf[256];
+                        snprintf(msgbuf, sizeof(msgbuf),
+                            "Program '%.192s' (%d) exit with status %d",
+                            prog->name, prog->pid, retcode);
+                        prog->pid = -1;
+                        logmsg(NOTE, msgbuf);
+                    }
                     /* Run jobs */
                     run_jobs(config, pid, retcode);
                     /* Restart automatically, if applicable */
@@ -197,14 +217,14 @@ int server_main(struct config *config, int background, char *argv[]) {
                         struct request *req = request_synth(config, prog,
                             "start", NULL);
                         if (! req) {
-                            perror("Failed to allocate request");
+                            logerr(FATAL, "Failed to allocate request");
                             goto commerr;
                         }
                         req->flags |= REQUEST_DIHNTR;
                         if (! request_schedule(req, timestamp() +
                                             prog->delay)) {
                             request_free(req);
-                            perror("Failed to schedule request");
+                            logerr(FATAL, "Failed to schedule request");
                             goto commerr;
                         }
                     }
@@ -219,7 +239,7 @@ int server_main(struct config *config, int background, char *argv[]) {
             int res = comm_recv(config->socket, &msg, &addr, COMM_DONTWAIT);
             if (res == -2) continue;
             if (res == -1) {
-                perror("Failed to receive message");
+                logerr(FATAL, "Failed to receive message");
                 return 1;
             }
             /* Reject non-repliable messages */
@@ -230,7 +250,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                 /* No command? Cannot really do anything */
                 if (comm_senderr(config->socket, "NOMSG", "Empty message",
                                  &addr, COMM_DONTWAIT) == -1) {
-                    perror("Failed to send message");
+                    logerr(FATAL, "Failed to send message");
                     goto commerr;
                 }
             } else if (strcmp(msg.fields[0], "PING") == 0) {
@@ -238,7 +258,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                 if (msg.fieldnum > 2) {
                     if (comm_senderr(config->socket, "BADMSG", "Bad message",
                                      &addr, COMM_DONTWAIT) == -1) {
-                        perror("Failed to send message");
+                        logerr(FATAL, "Failed to send message");
                         goto commerr;
                     }
                 } else if (msg.fieldnum == 2) {
@@ -252,7 +272,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                 if (msg.fieldnum != 2) {
                     if (comm_senderr(config->socket, "BADMSG", "Bad message",
                                      &addr, COMM_DONTWAIT) == -1) {
-                        perror("Failed to send message");
+                        logerr(FATAL, "Failed to send message");
                         goto commerr;
                     }
                 } else if (msg.creds.uid != 0 &&
@@ -260,25 +280,25 @@ int server_main(struct config *config, int background, char *argv[]) {
                     if (comm_senderr(config->socket, "EPERM",
                                      "Permission denied", &addr,
                                      COMM_DONTWAIT) == -1) {
-                        perror("Failed to send message");
+                        logerr(FATAL, "Failed to send message");
                         goto commerr;
                     }
                 } else if (strcmp(msg.fields[1], "reload") == 0) {
                     if (raise(SIGHUP) != 0) {
-                        perror("Could not signal oneself ?!");
+                        logerr(FATAL, "Could not signal oneself ?!");
                         goto commerr;
                     }
                     fields[0] = "OK";
                 } else if (strcmp(msg.fields[1], "shutdown") == 0) {
                     if (raise(SIGTERM) != 0) {
-                        perror("Could not signal oneself ?!");
+                        logerr(FATAL, "Could not signal oneself ?!");
                         goto commerr;
                     }
                     fields[0] = "OK";
                 } else {
                     if (comm_senderr(config->socket, "BADMSG", "Bad message",
                                      &addr, COMM_DONTWAIT) == -1) {
-                        perror("Failed to send message");
+                        logerr(FATAL, "Failed to send message");
                         goto commerr;
                     }
                 }
@@ -291,26 +311,26 @@ int server_main(struct config *config, int background, char *argv[]) {
                                                   COMM_DONTWAIT);
                 if (req == NULL) {
                     if (! errno) continue;
-                    perror("Failed to create request");
+                    logerr(FATAL, "Failed to create request");
                     goto commerr;
                 }
                 /* Validate it */
                 res = request_validate(req);
                 if (res == -1) {
-                    perror("Failed to validate request");
+                    logerr(FATAL, "Failed to validate request");
                     goto commerr;
                 }
                 if (! res) {
                     if (comm_senderr(config->socket, "EPERM", "Permission denied",
                                      &addr, COMM_DONTWAIT) == -1) {
-                        perror("Failed to send message");
+                        logerr(FATAL, "Failed to send message");
                         goto commerr;
                     }
                     continue;
                 }
                 /* Act as appropriate */
                 if (request_run(req) == -1) {
-                    perror("Failed to process request");
+                    logerr(FATAL, "Failed to process request");
                     goto commerr;
                 }
                 /* Dispose of request */
@@ -318,7 +338,7 @@ int server_main(struct config *config, int background, char *argv[]) {
             } else {
                 if (comm_senderr(config->socket, "BADCMD", "No such command",
                                  &addr, COMM_DONTWAIT) == -1) {
-                    perror("Failed to send message");
+                    logerr(FATAL, "Failed to send message");
                     goto commerr;
                 }
             }
@@ -329,7 +349,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                 msg2.fields = fields;
                 if (comm_send(config->socket, &msg2, &addr,
                               COMM_DONTWAIT) == -1) {
-                    perror("Failed to send message");
+                    logerr(FATAL, "Failed to send message");
                     goto commerr;
                 }
             }
@@ -340,7 +360,7 @@ int server_main(struct config *config, int background, char *argv[]) {
         do {
             res = run_jobs(config, -1, JOB_NOEXIT);
             if (res == -1) {
-                perror("Callback execution failed");
+                logerr(FATAL, "Callback execution failed");
                 return 1;
             }
         } while (res);
@@ -428,13 +448,18 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
 int main(int argc, char *argv[]) {
     int server = 0, background = -1, ret;
     char *conffile = NULL, **args = NULL;
+    FILE *logfp = NULL;
+    char *logslevel = NULL, *logfacility = NULL;
+    int logilevel = NOTE;
     enum cmdaction action = SPAWN;
     struct opt opts;
+    struct logging_syslog syslogopts;
     struct config *config;
     /* Parse arguments */
     arginit(&opts, argv);
     for (;;) {
         int opt = argparse(&opts);
+        char *arg;
         if (opt == 0) {
             args = opts.argv + opts.curidx;
             break;
@@ -443,7 +468,7 @@ int main(int argc, char *argv[]) {
         } else if (opt == -2) {
             break;
         } else if (opt == -3) {
-            char *arg = getarg(&opts, 0);
+            arg = getarg(&opts, 0);
             if (strcmp(arg, "help") == 0) {
                 usage(1, 0);
             } else if (strcmp(arg, "version") == 0) {
@@ -452,7 +477,26 @@ int main(int argc, char *argv[]) {
             } else if (strcmp(arg, "config") == 0) {
                 conffile = getarg(&opts, 0);
                 if (! conffile) {
-                    fprintf(stderr, "Missing required argument for '%s'\n",
+                    fprintf(stderr, "Missing required argument for '--%s'\n",
+                            arg);
+                    usage(0, 2);
+                }
+            } else if (strcmp(arg, "log") == 0) {
+                char *val = getarg(&opts, 0);
+                if (! val) {
+                    fprintf(stderr, "Missing required argument for '--%s'\n",
+                            arg);
+                    usage(0, 2);
+                }
+                if (strcasecmp(val, "stderr") == 0) {
+                    logfp = stderr;
+                } else {
+                    logfacility = val;
+                }
+            } else if (strcmp(arg, "level") == 0) {
+                logslevel = getarg(&opts, 0);
+                if (! arg) {
+                    fprintf(stderr, "Missing required argument for '--%s'\n",
                             arg);
                     usage(0, 2);
                 }
@@ -472,8 +516,9 @@ int main(int argc, char *argv[]) {
             }
             continue;
         } else if (opt == -4) {
-            char *arg = getarg(&opts, 0);
-            char *eq = strchr(arg, '=');
+            char *eq;
+            arg = getarg(&opts, 0);
+            eq = strchr(arg, '=');
             *eq++ = '\0';
             if (strcmp(arg, "config") == 0) {
                 conffile = eq;
@@ -496,6 +541,28 @@ int main(int argc, char *argv[]) {
                             opt);
                     usage(0, 2);
                 }
+                break;
+            case 'l':
+                arg = getarg(&opts, 0);
+                if (! arg) {
+                    fprintf(stderr, "Missing required argument for '-%c'\n",
+                            opt);
+                    usage(0, 2);
+                }
+                if (strcasecmp(arg, "stderr") == 0) {
+                    logfp = stderr;
+                } else {
+                    logfacility = arg;
+                }
+                break;
+            case 'L':
+                arg = getarg(&opts, 0);
+                if (! arg) {
+                    fprintf(stderr, "Missing required argument for '-%c'\n",
+                            opt);
+                    usage(0, 2);
+                }
+                logslevel = arg;
                 break;
             case 'd':
                 server = 1;
@@ -523,6 +590,21 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Both daemon mode and an action specified\n");
         return 2;
     }
+    /* Prepare logging */
+    syslogopts.ident = PROGNAME;
+    syslogopts.option = LOG_PID;
+    syslogopts.facility = (logfacility) ? facility(logfacility) : -2;
+    if (syslogopts.facility == -1) {
+        fprintf(stderr, "Bad syslog facility: '%s'\n", logfacility);
+        return 2;
+    }
+    if (logslevel) {
+        logilevel = loglevel(logslevel);
+        if (logilevel == -1) {
+            fprintf(stderr, "Bad logging level: '%s'\n", logslevel);
+            return 2;
+        }
+    }
     /* Fill in configuration file */
     if (! conffile) {
         conffile = getenv("PROCMGR_CONFFILE");
@@ -537,6 +619,9 @@ int main(int argc, char *argv[]) {
     if (! config) die("Failed to load configuration");
     /* Main... branch */
     if (server) {
+        /* Prepare logging */
+        initlog(logfp, (syslogopts.facility == -2) ? NULL : &syslogopts,
+                logilevel);
         ret = server_main(config, background, args);
     } else {
         ret = client_main(config, action, args);
