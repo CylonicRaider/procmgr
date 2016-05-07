@@ -184,5 +184,8 @@ use ``sg wheel procmgr ...`` to obtain the ``wheel`` group.
 
 .. [1] Each script is run in an own process group, if that matters.
 
+   Also, this means that scripts cannot ``wait`` on the program since they
+   are not its parents.
+
 .. |procmgr| replace:: ``procmgr``
 .. _procmgr: https://github.com/CylonicRaider/procmgr
