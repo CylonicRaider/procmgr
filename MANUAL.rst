@@ -18,7 +18,6 @@ action.
 Command-line usage
 ==================
 
-
 **Usage**: ``procmgr [-h|-V] [-c conffile] [-l log] [-L level]
 [-d [-f]|-t|-s|-r] [program action [args ...]]``
 
