@@ -321,7 +321,7 @@ struct program *prog_new(struct config *conf, struct section *config) {
 
 /* Free all the resources underlying the given structure */
 int prog_del(struct program *prog) {
-    if (--prog->refcount) return 0;
+    if (--prog->refcount > 0) return 0;
     if (prog->name) free(prog->name);
     prog->pid = -1;
     prog->flags = 0;

@@ -209,6 +209,7 @@ int request_run(struct request *request) {
             if (! dupfd(request->fds[2], &req->fds[2])) goto error;
             req->config = request->config;
             req->program = prog;
+            req->program->refcount++;
             req->action = prog->act_start;
             req->argv = request->argv;
             req->creds = request->creds;
