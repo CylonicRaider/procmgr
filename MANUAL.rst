@@ -191,7 +191,8 @@ root).
 be sent), it might be necessary to change the primary group of the client
 process to make use of it; use the ``sg`` UNIX utility for that. For
 example, if user ``johndoe`` was member of the ``wheel`` group, he could
-use ``sg wheel procmgr ...`` to obtain the ``wheel`` group.
+use ``sg wheel procmgr ...`` to run ``procmgr ...`` as the ``wheel``
+group.
 
 .. [1] Each script is run in an own process group, if that matters.
 
