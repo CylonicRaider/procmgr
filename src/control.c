@@ -103,8 +103,6 @@ struct request *request_new(struct config *config, struct ctlmsg *msg,
 /* Create a "synthetic" request */
 struct request *request_synth(struct config *config, struct program *prog,
                               char *actname, char **argv) {
-    int i, l = 1;
-    char **p;
     /* Allocate structure */
     struct request *ret = calloc(1, sizeof(struct request));
     if (! ret) return NULL;
@@ -116,12 +114,19 @@ struct request *request_synth(struct config *config, struct program *prog,
     ret->action = prog_action(prog, actname);
     if (! ret->action) goto error;
     /* Duplicate argv */
-    if (argv) for (p = argv; *p; p++) l++;
-    ret->argv = calloc(l, sizeof(char *));
-    if (! ret->argv) goto error;
-    for (i = 0; i < l; i++) {
-        ret->argv[i] = strdup(argv[i]);
-        if (! ret->argv[i]) goto error;
+    if (argv) {
+        int i, l = 1;
+        char **p;
+        for (p = argv; *p; p++) l++;
+        ret->argv = calloc(l, sizeof(char *));
+        if (! ret->argv) goto error;
+        for (i = 0; i < l; i++) {
+            ret->argv[i] = strdup(argv[i]);
+            if (! ret->argv[i]) goto error;
+        }
+    } else {
+        ret->argv = calloc(1, sizeof(char *));
+        if (! ret->argv) goto error;
     }
     /* Finish */
     ret->creds.pid = -1;
@@ -240,7 +245,7 @@ int request_run(struct request *request) {
              * -1, but accidentally killing every process we can is *not* the
              * scenario we desire. */
             if (prog->pid != -1) {
-                if (kill(prog->pid, SIGTERM) == -1) return -1;
+                kill(prog->pid, SIGTERM);
             }
             /* Fall through to scheduling a waiter below */
         } else if (request->action == prog->act_status) {
@@ -513,7 +518,7 @@ int setup_fds(struct request *request) {
 /* Send an error message to the client as specified by the given request,
  * and return whether that succeeded. */
 int request_senderr(struct request *request, char *code, char *desc) {
-    if (! request->addr.addrlen) return 0;
+    if (! request->addr.addrlen) return 1;
     return (comm_senderr(request->config->socket, code, desc,
                          &request->addr, request->cflags) != -1);
 }
@@ -522,7 +527,7 @@ int request_senderr(struct request *request, char *code, char *desc) {
 int request_reply(int fd, struct addr *addr, int flags, int code) {
     char numbuf[64], *fields[] = { "OK", numbuf };
     struct ctlmsg msg = CTLMSG_INIT;
-    if (! addr->addrlen) return 0;
+    if (! addr->addrlen) return 1;
     snprintf(numbuf, sizeof(numbuf), "%d", code);
     msg.fields = fields;
     msg.fieldnum = sizeof(fields) / sizeof(*fields);

@@ -70,6 +70,36 @@ struct config *create_config(char *filename) {
         return NULL;
 }
 
+/* Write a log message about the given request */
+void log_request(struct request *request) {
+    static struct verbinfo {
+        char *action;
+        char *verb;
+    } verbs[] = {
+        { "start",   "Starting"   },
+        { "restart", "Restarting" },
+        { "reload",  "Reloading"  },
+        { "signal",  "Signalling" },
+        { "stop",    "Stopping"   },
+        { "status",  NULL         },
+        { NULL,      NULL         }
+    };
+    char msgbuf[512];
+    struct verbinfo *p;
+    /* Find correct verb */
+    for (p = verbs; p->action; p++) {
+        if (strcmp(request->action->name, p->action) == 0) break;
+    }
+    /* Cancel if action not found or not logged */
+    if (! p->verb) return;
+    /* Format message */
+    snprintf(msgbuf, sizeof(msgbuf), "%s program '%.128s' on behalf "
+        "of {PID=%d,UID=%d,GID=%d}", p->verb, request->program->name,
+        request->creds.pid, request->creds.uid, request->creds.gid);
+    /* Output it */
+    logmsg(INFO, msgbuf);
+}
+
 /* Abort program execution with the given error message along with
  * strerror(errno) */
 void die(char *func) {
@@ -203,10 +233,12 @@ int server_main(struct config *config, int background, char *argv[]) {
                     /* Obtain program */
                     prog = config_getpid(config, pid);
                     if (prog) {
-                        char msgbuf[256];
+                        char msgbuf[320];
                         snprintf(msgbuf, sizeof(msgbuf),
-                            "Program '%.192s' (%d) exit with status %d",
-                            prog->name, prog->pid, retcode);
+                            "Program '%.192s' (%d) exit with status %d%s",
+                            prog->name, prog->pid, retcode,
+                            (prog->delay > 0 && prog->flags & PROG_RUNNING) ?
+                                "; will restart" : "");
                         prog->pid = -1;
                         logmsg(NOTE, msgbuf);
                     }
@@ -222,7 +254,7 @@ int server_main(struct config *config, int background, char *argv[]) {
                         }
                         req->flags |= REQUEST_DIHNTR;
                         if (! request_schedule(req, timestamp() +
-                                            prog->delay)) {
+                                               prog->delay)) {
                             request_free(req);
                             logerr(FATAL, "Failed to schedule request");
                             goto commerr;
@@ -328,6 +360,8 @@ int server_main(struct config *config, int background, char *argv[]) {
                     }
                     continue;
                 }
+                /* Drop a note */
+                log_request(req);
                 /* Act as appropriate */
                 if (request_run(req) == -1) {
                     logerr(FATAL, "Failed to process request");

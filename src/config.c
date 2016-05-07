@@ -268,9 +268,10 @@ struct program *prog_new(struct config *conf, struct section *config) {
         ret->name = strdup(config->name);
     }
     if (! ret->name) goto error;
-    /* Obtain default UID and GID */
+    /* Default values */
     def_uid = (! conf) ? -1 : conf->def_uid;
     def_gid = (! conf) ? -1 : conf->def_gid;
+    ret->delay = -1;
     /* Read configuration */
     if (config) {
         /* Update default UID and GID */
@@ -308,7 +309,6 @@ struct program *prog_new(struct config *conf, struct section *config) {
     /* Set miscellaneous variables */
     ret->refcount = 1;
     ret->pid = -1;
-    ret->delay = -1;
     /* Done */
     goto end;
     error:
@@ -325,7 +325,7 @@ int prog_del(struct program *prog) {
     if (prog->name) free(prog->name);
     prog->pid = -1;
     prog->flags = 0;
-    prog->delay = 0;
+    prog->delay = -1;
     if (prog->prev) prog->prev->next = prog->next;
     if (prog->next) prog->next->prev = prog->prev;
     prog->prev = NULL;
