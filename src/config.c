@@ -154,7 +154,7 @@ int config_update(struct config *conf, int quiet) {
             conf->def_gid = value;
         }
         /* Default SUID */
-        pair = section_get_last(sec, "allow-suid");
+        pair = section_get_last(sec, "default-suid");
         if (pair) {
             if (! parse_int(&value, pair->value, 1)) {
                 if (! quiet) perror("Could not parse default SUID");
@@ -163,7 +163,7 @@ int config_update(struct config *conf, int quiet) {
             conf->def_suid = value;
         }
         /* Default SGID */
-        pair = section_get_last(sec, "allow-sgid");
+        pair = section_get_last(sec, "default-sgid");
         if (pair) {
             if (! parse_int(&value, pair->value, 1)) {
                 if (! quiet) perror("Could not parse default SGID");
