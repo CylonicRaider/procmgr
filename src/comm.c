@@ -52,11 +52,12 @@ int comm_listen(struct config *conf) {
     int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (fd == -1)
         return -1;
+    /* Change file permissions */
+    if (fchmod(fd, 0777) == -1)
+        goto error;
     /* Bind */
     if (bind(fd, (struct sockaddr *) &addr, sizeof(addr)) == -1)
         goto error;
-    /* Change file permissions */
-    fchmod(fd, 0777);
     /* Allow credential receiving */
     if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &one, sizeof(one)) == -1)
         goto error;
