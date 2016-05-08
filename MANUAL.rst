@@ -66,20 +66,30 @@ be taken as part of that section).
     socket-path = <communication socket path>
     allow-uid = <default numerical UID to allow>
     allow-gid = <similar to allow-uid>
+    default-suid = <default UID to switch to>
+    default-sgid = <default GID to switch to>
 
     [prog-<name>]
     allow-uid = <default UID for all uid-* in this section>
-    allow-gid = <default GID>
+    allow-gid = <default GID for gid-*>
+    default-suid = <default UID for all suid-* in this section>
+    default-sgid = <default GID for sgid-*>
     cmd-<action> = <shell command to run for the given action>
     uid-<action> = <UID to allow to perform this action>
     gid-<action> = <GID to allow to perform this action>
+    suid-<action> = <UID to switch to when performing the action>
+    sgid-<action> = <GID to switch to when performing the action>
+    cwd = <directory to switch to before performing actions>
     restart-delay = <seconds after which approximately to restart>
 
 For the UID and GID fields, and ``restart-delay``, the special value ``none``
 (which is equal to -1) may be used, indicating that no UID/GID should be
-allowed to perform an action, or that the program should not be
-automatically restarted (as it happens for every non-positive value of
-restart-delay), respectively.
+allowed to perform an action or be changed to when performing it (thus
+staying at the UID/GID the daemon itself had), or that the program should not
+be automatically restarted (as it happens for every non-positive value of
+restart-delay), respectively. ``cwd`` is only set at program level since an
+individual command can change its directory itself.
+
 Arbitrarily many program sections can be specified; out of same-named
 ones, only the last is considered; similarly for all values. Spacing
 between sections is purely decorational, although it increases legibility.
@@ -87,7 +97,7 @@ An example::
 
     socket-path = /var/local/procmgr-local
     # If GID 99 is, say, wheel, and members of that group should be
-    # allowed to perform actions from their own accounts.
+    # allowed to perform actions without elevating privileges.
     allow-gid = 99
 
     # Interaction with this would happen via "procmgr game-server ..."
@@ -97,6 +107,9 @@ An example::
     # Note the exec, to ensure procmgr sees the UID of the server itself
     # and not of the shell.
     cmd-start = exec /home/johndoe/bin/game.server
+    # Change to the account of johndoe.
+    suid-start = 1000
+    sgid-start = 1000
     # Note the use of the $PID variable, which (following from above)
     # is the UID of the server.
     cmd-reload = kill -HUP $PID
