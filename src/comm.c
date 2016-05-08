@@ -58,6 +58,9 @@ int comm_listen(struct config *conf) {
     /* Bind */
     if (bind(fd, (struct sockaddr *) &addr, sizeof(addr)) == -1)
         goto error;
+    /* fchmod() seems to fail silently */
+    if (chmod(conf->socketpath, 0777) == -1)
+        goto error;
     /* Allow credential receiving */
     if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &one, sizeof(one)) == -1)
         goto error;

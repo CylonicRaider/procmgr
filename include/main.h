@@ -19,10 +19,13 @@
 enum cmdaction { SPAWN, TEST, STOP, RELOAD };
 
 /* Server main loop
- * background specifies whether to fork into background. argv is verified not
- * to contain anything; it is an error to have anything in it.
+ * background specifies whether to fork into background. pidfile is either
+ * NULL or the location of a file to store the process ID of the daemon in.
+ * argv is verified not to contain anything; it is an error to have anything
+ * in it.
  * Returns 0 on success, or a positive integer on failure. */
-int server_main(struct config *config, int background, char *argv[]);
+int server_main(struct config *config, int background, char *pidfile,
+                char *argv[]);
 
 /* Client main function
  * action is the action to perform, argv is an array of command-line

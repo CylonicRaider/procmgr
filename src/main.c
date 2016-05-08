@@ -5,12 +5,14 @@
 
 #define _GNU_SOURCE
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
 #include <sys/select.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -123,7 +125,8 @@ static void notifier(int signum) {
 }
 
 /* Server main loop */
-int server_main(struct config *config, int background, char *argv[]) {
+int server_main(struct config *config, int background, char *pidfile,
+                char *argv[]) {
     struct ctlmsg msg = CTLMSG_INIT;
     struct sigaction act;
     fd_set readfds;
@@ -166,6 +169,24 @@ int server_main(struct config *config, int background, char *argv[]) {
     if (background && daemonize() == -1) {
         perror("Failed to go into background");
         return 1;
+    }
+    /* Write PID file */
+    if (pidfile) {
+        char pidbuf[32];
+        int pidf;
+        memset(pidbuf, 0, sizeof(pidbuf));
+        snprintf(pidbuf, sizeof(pidbuf), "%d\n", getpid());
+        pidbuf[sizeof(pidbuf) - 1] = '\0';
+        pidf = open(pidfile, O_WRONLY | O_CREAT, 0644);
+        if (pidf == -1) {
+            logerr(ERROR, "Could not open PID file");
+        } else {
+            int l = strlen(pidbuf);
+            if (write(pidf, pidbuf, l) != l) {
+                logerr(ERROR, "Could not write PID file");
+            }
+            close(pidf);
+        }
     }
     /* Final preparations */
     FD_ZERO(&readfds);
@@ -481,7 +502,7 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
 /* Main function */
 int main(int argc, char *argv[]) {
     int server = 0, background = -1, ret;
-    char *conffile = NULL, **args = NULL;
+    char *conffile = NULL, *pidfile = NULL, **args = NULL;
     FILE *logfp = NULL;
     char *logslevel = NULL, *logfacility = NULL;
     int logilevel = NOTE;
@@ -529,7 +550,14 @@ int main(int argc, char *argv[]) {
                 }
             } else if (strcmp(arg, "loglevel") == 0) {
                 logslevel = getarg(&opts, 0);
-                if (! arg) {
+                if (! logslevel) {
+                    fprintf(stderr, "Missing required argument for '--%s'\n",
+                            arg);
+                    usage(0, 2);
+                }
+            } else if (strcmp(arg, "pid") == 0) {
+                pidfile = getarg(&opts, 0);
+                if (! pidfile) {
                     fprintf(stderr, "Missing required argument for '--%s'\n",
                             arg);
                     usage(0, 2);
@@ -598,6 +626,14 @@ int main(int argc, char *argv[]) {
                 }
                 logslevel = arg;
                 break;
+            case 'P':
+                pidfile = getarg(&opts, 0);
+                if (! pidfile) {
+                    fprintf(stderr, "Missing required argument for '-%c'\n",
+                            opt);
+                    usage(0, 2);
+                }
+                break;
             case 'd':
                 server = 1;
                 break;
@@ -656,7 +692,7 @@ int main(int argc, char *argv[]) {
         /* Prepare logging */
         initlog(logfp, (syslogopts.facility == -2) ? NULL : &syslogopts,
                 logilevel);
-        ret = server_main(config, background, args);
+        ret = server_main(config, background, pidfile, args);
     } else {
         ret = client_main(config, action, args);
     }
