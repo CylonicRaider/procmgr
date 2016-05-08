@@ -19,7 +19,7 @@ void comm_del(struct ctlmsg *msg) {
         int i;
         for (i = 0; i < msg->fieldnum; i++) free(msg->fields[i]);
     }
-    if (msg->fields) free(msg->fields);
+    free(msg->fields);
     msg->fieldnum = 0;
     msg->fields = NULL;
     msg->creds.pid = -1;

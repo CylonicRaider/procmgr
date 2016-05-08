@@ -13,20 +13,29 @@
  *     socket-path = <communication socket path>
  *     allow-uid = <default numerical UID to allow>
  *     allow-gid = <similar to allow-uid>
+ *     default-suid = <default UID to switch to>
+ *     default-sgid = <default GID to switch to>
  *
  *     [prog-<name>]
  *     allow-uid = <default UID for all uid-* in this section>
- *     allow-gid = <default GID>
+ *     allow-gid = <default GID for gid-*>
+ *     default-suid = <default UID for all suid-* in this section>
+ *     default-sgid = <default GID for sgid-*>
  *     cmd-<action> = <shell command to run for the given action>
  *     uid-<action> = <UID to allow to perform this action>
  *     gid-<action> = <GID to allow to perform this action>
+ *     suid-<action> = <UID to switch to when performing the action>
+ *     sgid-<action> = <GID to switch to when performing the action>
+ *     cwd = <directory to switch to before performing actions>
  *     restart-delay = <seconds after which approximately to restart>
  *
  * For the UID and GID fields, and restart-delay, the special value "none"
  * (which is equal to -1) may be used, indicating that no UID/GID should be
- * allowed to perform an action, or that the program should not be
- * automatically restarted (as it happens for every non-positive value of
- * restart-delay), respectively.
+ * allowed to perform an action or changed to when performing it (thus
+ * remaining at the UID/GID the daemon itself had), or that the program
+ * should not be automatically restarted (as it happens for every
+ * non-positive value of restart-delay), respectively. cwd is only set at
+ * program level since an individual command can change its directory itself.
  * Arbitrarily many program sections can be specified; out of same-named
  * ones, only the last is considered; similarly for all values. Spacing
  * between sections is purely decorational, although it increases legibility.
@@ -34,7 +43,7 @@
  *
  *     socket-path = /var/local/procmgr-local
  *     # If GID 99 is, say, wheel, and members of that group should be
- *     # allowed to perform actions from their own accounts.
+ *     # allowed to perform actions without elevating privileges.
  *     allow-gid = 99
  *
  *     # Interaction with this would happen via "procmgr game-server ..."
@@ -44,8 +53,11 @@
  *     # Note the exec, to ensure procmgr sees the UID of the server itself
  *     # and not of the shell.
  *     cmd-start = exec /home/johndoe/bin/game.server
+ *     # Change to the account of johndoe.
+ *     suid-start = 1000
+ *     sgid-start = 1000
  *     # Note the use of the $PID variable, which (following from above)
- *     # is the UID of the server.
+ *     # is the PID of the server.
  *     cmd-reload = kill -HUP $PID
  */
 
@@ -84,6 +96,8 @@ struct action;
  * flags     : (int) Bitmask of CONFIG_* constants.
  * def_uid   : (int) The default value for allow_uid in actions.
  * def_gid   : (int) The default value for allow_gid in actions.
+ * def_suid  : (int) The default value for suid in actions.
+ * def_sgid  : (int) The default value for sgid in actions.
  * conffile  : (struct conffile *) The configuration file underlying this
  *             configuration. May be NULL.
  * jobs      : (struct jobqueue *) The queue of pending jobs.
@@ -95,6 +109,8 @@ struct config {
     int flags;
     int def_uid;
     int def_gid;
+    int def_suid;
+    int def_sgid;
     struct conffile *conffile;
     struct jobqueue *jobs;
     struct program *programs;
@@ -110,9 +126,12 @@ struct config {
  *              or -1 if none.
  * flags      : (int) Flags. See the PROG_* constants for descriptions.
  * delay      : (int) Restart delay in seconds.
+ * cwd        : (char *) Working directory to start actions in (unspecified
+ *              if NULL).
  * prev, next : (struct program *) Linked list interconnection.
  * act_start  : (struct action *) The action to start the program. If not
- *              configured, starting fails.
+ *              configured, starting fails. The PID of the process started
+ *              becomes the new PID of the program.
  * act_restart: (struct action *) The action to restart the program. If not
  *              configured, the program is stopped (if running) and started
  *              (again); if configured, the PID of the resulting process
@@ -122,7 +141,7 @@ struct config {
  * act_signal : (struct action *) An arbitrary user-defined action. The
  *              default is to do nothing.
  * act_stop   : (struct action *) The action to stop the program. If not
- *              configured, the "main" process is killed using SIGTERM.
+ *              configured, the process is killed using SIGTERM.
  * act_status : (struct action *) The action to check program status. If not
  *              configured, "running" is printed to stdout (with a trailing
  *              newline) while checking status and 0 is returned if the
@@ -134,6 +153,7 @@ struct program {
     int pid;
     int flags;
     int delay;
+    char *cwd;
     struct program *prev, *next;
     struct action *act_start;
     struct action *act_restart;
@@ -168,12 +188,18 @@ struct program {
  *            EUID of 0 (i.e., be root).
  * allow_gid: (int) GID to allow to perform this action, with semantics
  *            similar to allow_uid (except for the EUID 0 clause).
+ * suid     : (int) UID to switch to when performing this action. Does not
+ *            affect default actions.
+ * sgid     : (int) GID to switch to when performing this action, similar
+ *            to suid.
  */
 struct action {
     char *name;
     char *command;
     int allow_uid;
     int allow_gid;
+    int suid;
+    int sgid;
 };
 
 /* Create a new runtime configuration based on the given configuration file

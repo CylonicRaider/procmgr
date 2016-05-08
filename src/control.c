@@ -271,6 +271,7 @@ int request_run(struct request *request) {
         }
     } else {
         char **p, **argv, *envp[6], pidbuf[64];
+        struct action *act = request->action;
         /* Prepare for job spawning */
         int l = 4;
         for (p = request->argv; *p; p++) l++;
@@ -279,12 +280,12 @@ int request_run(struct request *request) {
         memcpy(argv + 3, request->argv, (l - 4) * sizeof(char *));
         argv[0] = ACTION_SHELL;
         argv[1] = "-c";
-        argv[2] = request->action->command;
+        argv[2] = act->command;
         /* Prepare environment */
         envp[0] = concat("PATH=", ACTION_PATH);
         envp[1] = concat("SHELL=", ACTION_SHELL);
         envp[2] = concat("PROGNAME=", prog->name);
-        envp[3] = concat("ACTION=", request->action->name);
+        envp[3] = concat("ACTION=", act->name);
         if (prog->pid == -1) {
             envp[4] = "PID=";
         } else {
@@ -302,6 +303,20 @@ int request_run(struct request *request) {
             }
             /* Configure file descriptors */
             setup_fds(request);
+            /* Drop privileges */
+            if (act->sgid != -1 && setgid(act->sgid) == -1) {
+                perror("sgid");
+                _exit(126);
+            }
+            if (act->suid != -1 && setuid(act->suid) == -1) {
+                perror("suid");
+                _exit(126);
+            }
+            /* Change working directory */
+            if (prog->cwd && chdir(prog->cwd) == -1) {
+                perror("chdir");
+                _exit(126);
+            }
             /* exec() script */
             execve(argv[0], argv, envp);
             perror("execve");

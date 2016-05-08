@@ -14,14 +14,20 @@ static struct action **action_pointer(struct program *prog, char *name);
 static void action_free(struct action **act);
 
 static struct actionname {
-    char *base, *cmd, *uid, *gid;
+    char *base, *cmd, *uid, *gid, *suid, *sgid;
 } action_names[] = {
-    { "start",   "cmd-start",   "uid-start",   "gid-start"   },
-    { "restart", "cmd-restart", "uid-restart", "gid-restart" },
-    { "reload",  "cmd-reload",  "uid-reload",  "gid-reload"  },
-    { "signal",  "cmd-signal",  "uid-signal",  "gid-signal"  },
-    { "stop",    "cmd-stop",    "uid-stop",    "gid-stop"    },
-    { "status",  "cmd-status",  "uid-status",  "gid-status"  } };
+    { "start",   "cmd-start",    "uid-start",   "gid-start",
+                 "suid-start",   "sgid-start"                  },
+    { "restart", "cmd-restart",  "uid-restart", "gid-restart",
+                 "suid-restart", "sgid-restart"                },
+    { "reload",  "cmd-reload",   "uid-reload",  "gid-reload",
+                 "suid-reload",  "sgid-reload"                 },
+    { "signal",  "cmd-signal",   "uid-signal",  "gid-signal",
+                 "suid-signal",  "sgid-signal"                 },
+    { "stop",    "cmd-stop",     "uid-stop",    "gid-stop",
+                 "suid-stop",    "sgid-stop"                   },
+    { "status",  "cmd-status",   "uid-status",  "gid-status",
+                 "suid-status",  "sgid-status"                 } };
 #define action_count (sizeof(action_names) / sizeof(*action_names))
 
 /* Create a new runtime configuration based on the given configuration file */
@@ -120,7 +126,7 @@ int config_update(struct config *conf, int quiet) {
         /* Configuration socket path */
         pair = section_get_last(sec, "socket-path");
         if (pair) {
-            if (conf->socketpath) free(conf->socketpath);
+            free(conf->socketpath);
             conf->socketpath = strdup(pair->value);
             if (! conf->socketpath) {
                 if (! quiet) perror("Could not allocate string");
@@ -258,7 +264,7 @@ struct program *prog_new(struct config *conf, struct section *config) {
     struct pair *pair;
     struct program *ret = calloc(1, sizeof(struct program));
     struct action *act = NULL;
-    int i, def_uid, def_gid;
+    int i, def_uid, def_gid, def_suid, def_sgid;
     /* Set name */
     if (! config->name) {
         ret->name = strdup("");
@@ -271,19 +277,34 @@ struct program *prog_new(struct config *conf, struct section *config) {
     /* Default values */
     def_uid = (! conf) ? -1 : conf->def_uid;
     def_gid = (! conf) ? -1 : conf->def_gid;
+    def_suid = (! conf) ? -1 : conf->def_suid;
+    def_sgid = (! conf) ? -1 : conf->def_sgid;
+    ret->cwd = NULL;
     ret->delay = -1;
     /* Read configuration */
     if (config) {
-        /* Update default UID and GID */
+        /* Update default UIDs and GIDs */
         pair = section_get_last(config, "allow-uid");
         if (pair && ! parse_int(&def_uid, pair->value, 1)) goto error;
         pair = section_get_last(config, "allow-gid");
         if (pair && ! parse_int(&def_gid, pair->value, 1)) goto error;
-        /* Update restarting delay */
+        pair = section_get_last(config, "default-suid");
+        if (pair && ! parse_int(&def_suid, pair->value, 1)) goto error;
+        pair = section_get_last(config, "default-sgid");
+        if (pair && ! parse_int(&def_sgid, pair->value, 1)) goto error;
+        /* Set restarting delay */
         pair = section_get_last(config, "restart-delay");
         if (pair && ! parse_int(&ret->delay, pair->value, 1)) goto error;
-        /* Initialize actions */
-        for (i = 0; i < action_count; i++) {
+        /* Set CWD */
+        pair = section_get_last(config, "cwd");
+        if (pair) {
+            ret->cwd = strdup(pair->value);
+            if (! ret->cwd) goto error;
+        }
+    }
+    /* Initialize actions */
+    for (i = 0; i < action_count; i++) {
+        if (config) {
             /* Set command */
             pair = section_get_last(config, action_names[i].cmd);
             act = calloc(1, sizeof(struct action));
@@ -293,18 +314,28 @@ struct program *prog_new(struct config *conf, struct section *config) {
                 act->command = strdup(pair->value);
                 if (! act->command) goto error;
             }
-            /* Set up UID and GID */
-            act->allow_uid = def_uid;
-            act->allow_gid = def_gid;
+        }
+        /* Set up UIDs and GIDs */
+        act->allow_uid = def_uid;
+        act->allow_gid = def_gid;
+        act->suid = def_suid;
+        act->sgid = def_sgid;
+        if (config) {
             pair = section_get_last(config, action_names[i].uid);
             if (pair && ! parse_int(&act->allow_uid, pair->value, 1))
                 goto error;
             pair = section_get_last(config, action_names[i].gid);
             if (pair && ! parse_int(&act->allow_gid, pair->value, 1))
                 goto error;
-            /* Insert into structure */
-            *action_pointer(ret, action_names[i].base) = act;
+            pair = section_get_last(config, action_names[i].suid);
+            if (pair && ! parse_int(&act->suid, pair->value, 1))
+                goto error;
+            pair = section_get_last(config, action_names[i].sgid);
+            if (pair && ! parse_int(&act->sgid, pair->value, 1))
+                goto error;
         }
+        /* Insert into structure */
+        *action_pointer(ret, action_names[i].base) = act;
     }
     /* Set miscellaneous variables */
     ret->refcount = 1;
@@ -322,10 +353,13 @@ struct program *prog_new(struct config *conf, struct section *config) {
 /* Free all the resources underlying the given structure */
 int prog_del(struct program *prog) {
     if (--prog->refcount > 0) return 0;
-    if (prog->name) free(prog->name);
+    free(prog->name);
+    prog->name = NULL;
     prog->pid = -1;
     prog->flags = 0;
     prog->delay = -1;
+    free(prog->cwd);
+    prog->cwd = NULL;
     if (prog->prev) prog->prev->next = prog->next;
     if (prog->next) prog->next->prev = prog->prev;
     prog->prev = NULL;
