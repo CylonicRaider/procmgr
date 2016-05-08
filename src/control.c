@@ -328,13 +328,12 @@ int request_run(struct request *request) {
         /* Clean up */
         for (l = 0; l < 4; l++) free(envp[l]);
     }
-    /* Update internal PID */
+    /* Special handling for starts and restarts */
     if (request->action == prog->act_start ||
             request->action == prog->act_restart) {
+        /* Update internal PID */
         prog->pid = (ret == 0) ? -1 : ret;
-    }
-    /* Reply to starts immediately */
-    if (request->action == prog->act_start) {
+        /* Reply immediately */
         return (request_reply(request->config->socket, &request->addr,
                               request->cflags, 0)) ? 0 : -1;
     }
