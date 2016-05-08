@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "logging.h"
 #include "config.h"
 
 /* Static functions/constants */
@@ -60,7 +61,8 @@ void config_del(struct config *conf) {
         close(conf->socket);
         if ((conf->flags & CONFIG_UNLINK) && conf->socketpath) {
             int en = errno;
-            unlink(conf->socketpath);
+            if (unlink(conf->socketpath) == -1)
+                logerr(ERROR, "Failed to remove socket");
             errno = en;
         }
     }

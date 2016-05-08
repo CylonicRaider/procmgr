@@ -129,6 +129,7 @@ int server_main(struct config *config, int background, char *pidfile,
                 char *argv[]) {
     struct ctlmsg msg = CTLMSG_INIT;
     struct sigaction act;
+    int ret = 1;
     fd_set readfds;
     /* Currently no arguments */
     if (argv && *argv) {
@@ -337,12 +338,22 @@ int server_main(struct config *config, int background, char *pidfile,
                         goto commerr;
                     }
                 } else if (strcmp(msg.fields[1], "reload") == 0) {
+                    char msgbuf[128];
+                    snprintf(msgbuf, sizeof(msgbuf), "Reloading on behalf "
+                        "of {PID=%d,UID=%d,GID=%d}", msg.creds.pid,
+                        msg.creds.uid, msg.creds.gid);
+                    logmsg(NOTE, msgbuf);
                     if (raise(SIGHUP) != 0) {
                         logerr(FATAL, "Could not signal oneself ?!");
                         goto commerr;
                     }
                     fields[0] = "OK";
                 } else if (strcmp(msg.fields[1], "shutdown") == 0) {
+                    char msgbuf[128];
+                    snprintf(msgbuf, sizeof(msgbuf), "Stopping on behalf "
+                        "of {PID=%d,UID=%d,GID=%d}", msg.creds.pid,
+                        msg.creds.uid, msg.creds.gid);
+                    logmsg(NOTE, msgbuf);
                     if (raise(SIGTERM) != 0) {
                         logerr(FATAL, "Could not signal oneself ?!");
                         goto commerr;
@@ -421,11 +432,16 @@ int server_main(struct config *config, int background, char *pidfile,
         } while (res);
     }
     /* Everything went well. :) */
-    return 0;
+    ret = 0;
+    goto end;
     /* Error happened while processing message */
     commerr:
         comm_del(&msg);
-        return 1;
+    end:
+        /* Remove PID file, if any */
+        if (pidfile && unlink(pidfile) == -1)
+            logerr(ERROR, "Could not remove PID file");
+        return ret;
 }
 
 /* Client main function */
