@@ -23,7 +23,7 @@ Command-line usage
 
 ========================= ===================================================
 ``-h`` (``--help``)       This help.
-``-V`` (``--version``)    Print version
+``-V`` (``--version``)    Print version.
 ``-c`` (``--config``)     Configuration file location (defaults to the
                           environment variable ``PROCMGR_CONFFILE``, or to
                           the compile-time constant ``DEFAULT_CONFFILE``,
