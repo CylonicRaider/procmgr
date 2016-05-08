@@ -153,6 +153,24 @@ int config_update(struct config *conf, int quiet) {
             }
             conf->def_gid = value;
         }
+        /* Default SUID */
+        pair = section_get_last(sec, "allow-suid");
+        if (pair) {
+            if (! parse_int(&value, pair->value, 1)) {
+                if (! quiet) perror("Could not parse default SUID");
+                return -2;
+            }
+            conf->def_suid = value;
+        }
+        /* Default SGID */
+        pair = section_get_last(sec, "allow-sgid");
+        if (pair) {
+            if (! parse_int(&value, pair->value, 1)) {
+                if (! quiet) perror("Could not parse default SGID");
+                return -2;
+            }
+            conf->def_sgid = value;
+        }
     }
     /* Mark all programs for removal (merged ones will have flag clear) */
     for (prog = conf->programs; prog; prog = prog->next) {
