@@ -55,9 +55,8 @@ int comm_listen(struct config *conf) {
     /* Bind */
     if (bind(fd, (struct sockaddr *) &addr, sizeof(addr)) == -1)
         goto error;
-    /* Change file permissions
-     * WARNING: Race conditions be here! */
-    chmod(conf->socketpath, 0777);
+    /* Change file permissions */
+    fchmod(fd, 0777);
     /* Allow credential receiving */
     if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &one, sizeof(one)) == -1)
         goto error;
