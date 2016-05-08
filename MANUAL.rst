@@ -18,7 +18,7 @@ action.
 Command-line usage
 ==================
 
-**Usage**: ``procmgr [-h|-V] [-c conffile] [-l log] [-L level]
+**Usage**: ``procmgr [-h|-V] [-c conffile] [-l log] [-L level] [-P pidfile]
 [-d [-f]|-t|-s|-r] [program action [args ...]]``
 
 ========================= ===================================================
@@ -34,6 +34,7 @@ Command-line usage
 ``-L`` (``--loglevel``)   Minimum severity of messages to log. ``level`` is
                           one of ``DEBUG``, ``INFO``, ``NOTE`` (the default),
                           ``WARN``, ``ERROR``, ``CRITICAL``, or ``FATAL``.
+``-P`` (``--pidfile``)    Write a PID file to the given location.
 ``-d`` (``--daemon``)     Start daemon (as opposed to the default "client"
                           mode).
 ``-f`` (``--foreground``) Stay in foreground (daemon mode only).

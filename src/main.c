@@ -25,7 +25,7 @@
 
 /* Usage and help */
 const char *USAGE = "USAGE: " PROGNAME " [-h|-V] [-c conffile] [-l log] [-L "
-    "level] [-d [-f]|-t|-s|-r] [program action [args ...]]\n";
+    "level] [-P pidfile] [-d [-f]|-t|-s|-r] [program action [args ...]]\n";
 const char *HELP =
     "-h: (--help) This help\n"
     "-V: (--version) Print version (" VERSION ")\n"
@@ -36,6 +36,7 @@ const char *HELP =
     "    Facility keywords override each other, \"stderr\" is a flag.\n"
     "-L: (--loglevel level) Minimum severity of messages to log. level is\n"
     "    one of DEBUG, INFO, NOTE (default), WARN, ERROR, CRITICAL, FATAL.\n"
+    "-P: (--pid pidfile) Write PID file to given path.\n"
     "-d: (--daemon) Start daemon (as opposed to the default \"client\"\n"
     "    mode)\n"
     "-f: (--foreground) Stay in foreground (daemon mode only)\n"
