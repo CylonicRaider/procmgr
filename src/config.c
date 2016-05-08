@@ -181,14 +181,7 @@ int config_update(struct config *conf, int quiet) {
     for (prog = conf->programs; prog; prog = nextprog) {
         nextprog = prog->next;
         if (! (prog->flags & PROG_REMOVE) || prog->pid) continue;
-        if (prog == conf->programs) {
-            conf->programs = prog->next;
-            conf->programs->prev = NULL;
-        } else {
-            prog->prev->next = prog->next;
-            if (prog->next) prog->next->prev = prog->prev;
-        }
-        if (prog_del(prog)) free(prog);
+        config_remove(conf, prog);
     }
     /* Done */
     return ret;
@@ -207,31 +200,25 @@ void config_add(struct config *conf, struct program *prog) {
         if (! prev) {
             conf->programs = prog;
             prog->prev = NULL;
-            prog->next = NULL;
         } else {
             prev->next = prog;
             prog->prev = prev;
-            prog->next = NULL;
         }
+        prog->next = NULL;
         return;
     }
     /* Re-link the structure */
-    if (old == conf->programs) {
-        conf->programs = prog;
-        prog->prev = NULL;
-        prog->next = old->next;
-    } else {
-        old->prev->next = prog;
-        if (old->next) old->next->prev = prog;
-        prog->prev = old->prev;
-        prog->next = old->next;
-    }
-    old->prev = NULL;
-    old->next = NULL;
+    if (conf->programs == old) conf->programs = prog;
+    prog->prev = old->prev;
+    prog->next = old->next;
+    if (prog->prev) prog->prev->next = prog;
+    if (prog->next) prog->next->prev = prog;
     /* Migrate PID and flags */
     prog->flags = old->flags & ~PROG_REMOVE;
     prog->pid = old->pid;
     /* Deallocate old structure */
+    old->prev = NULL;
+    old->next = NULL;
     if (prog_del(old)) free(old);
 }
 
@@ -281,7 +268,6 @@ struct program *prog_new(struct config *conf, struct section *config) {
     def_gid = (! conf) ? -1 : conf->def_gid;
     def_suid = (! conf) ? -1 : conf->def_suid;
     def_sgid = (! conf) ? -1 : conf->def_sgid;
-    ret->cwd = NULL;
     ret->delay = -1;
     /* Read configuration */
     if (config) {
