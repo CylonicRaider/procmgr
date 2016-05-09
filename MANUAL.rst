@@ -67,8 +67,8 @@ consists of two fields for each program, the program name and a
 space-separated list of tokens about its status.
 
 ============= ===============================================================
-``dead``      The program is not running.
 ``running``   The program is running.
+``dead``      The program is not running.
 ``lingering`` The program has been removed from configuration, but remains in
               memory because either it is still running, or procmgr has bugs
               (see also ``?!``).
