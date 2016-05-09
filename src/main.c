@@ -267,20 +267,25 @@ int server_main(struct config *config, int background, char *pidfile,
                     }
                     /* Run jobs */
                     run_jobs(config, pid, retcode);
-                    /* Restart automatically, if applicable */
-                    if (prog && prog->delay > 0) {
-                        struct request *req = request_synth(config, prog,
-                            "start", NULL);
-                        if (! req) {
-                            logerr(FATAL, "Failed to allocate request");
-                            goto commerr;
-                        }
-                        req->flags |= REQUEST_DIHNTR;
-                        if (! request_schedule(req, timestamp() +
-                                               prog->delay)) {
-                            request_free(req);
-                            logerr(FATAL, "Failed to schedule request");
-                            goto commerr;
+                    if (prog) {
+                        if (prog->delay > 0 && prog->flags & PROG_RUNNING) {
+                            /* Restart automatically, if applicable */
+                            struct request *req = request_synth(config, prog,
+                                "start", NULL);
+                            if (! req) {
+                                logerr(FATAL, "Failed to allocate request");
+                                goto commerr;
+                            }
+                            req->flags |= REQUEST_DIHNTR;
+                            if (! request_schedule(req, timestamp() +
+                                                prog->delay)) {
+                                request_free(req);
+                                logerr(FATAL, "Failed to schedule request");
+                                goto commerr;
+                            }
+                        } else if (prog->flags & PROG_REMOVE) {
+                            /* Garbage-collect removed programs */
+                            config_remove(config, prog);
                         }
                     }
                 }
