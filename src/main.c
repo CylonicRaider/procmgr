@@ -571,10 +571,9 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
                 int ll = strlen(replydata.data[l]);
                 if (ll > w) w = ll;
             }
-            w++;
             /* Write columns */
             for (l = 1; l < replydata.len; l += 2) {
-                printf("%.*s: %s\n", w, replydata.data[l],
+                printf("%-*s: %s\n", w, replydata.data[l],
                        replydata.data[l + 1]);
             }
         } else {
