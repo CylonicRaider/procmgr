@@ -431,7 +431,12 @@ int server_main(struct config *config, int background, char *pidfile,
                 l = 1;
                 for (p = config->programs; p; p = p->next, l += 2) {
                     data[l] = p->name;
-                    data[l + 1] = (p->pid == -1) ? "dead" : "running";
+                    if (p->flags & PROG_REMOVE) {
+                        data[l + 1] = (p->pid == -1) ? "dead lingering ?!" :
+                            "running lingering";
+                    } else {
+                        data[l + 1] = (p->pid == -1) ? "dead" : "running";
+                    }
                 }
                 /* Send reply */
                 msg2.fieldnum = l;
