@@ -42,6 +42,11 @@ Command-line usage
 ``-s`` (``--stop``)       Signal the daemon (if any running) to stop.
 ``-r`` (``--reload``)     Signal the daemon (if any running) to reload its
                           configuration.
+``-a`` (``--all``)        List the status of all programs (not invoking the
+                          ``status`` action). Output is in a nice tabular
+                          form. See `Extended status`_.
+``-A`` (``--all-null``)   The same as ``-a``, but with the fields terminated
+                          by NUL-s.
 ========================= ===================================================
 
 If none of ``-dftsr`` are supplied, ``program`` and ``action`` must be
@@ -52,6 +57,24 @@ If no ``-l`` option is specified, nothing is logged (except fatal messages,
 which are always copied to (at least) stderr). Logging happens only in server
 mode, in client mode, messages are written to stderr (and the settings are
 ignored).
+
+Extended status
+---------------
+
+Accessed by the ``-a`` and ``-A`` command-line arguments, the ``extended
+status`` conveys information about procmgr's view of its programs. Output
+consists of two fields for each program, the program name and a
+space-separated list of tokens about its status.
+
+============= ===============================================================
+``dead``      The program is not running.
+``running``   The program is running.
+``lingering`` The program has been removed from configuration, but remains in
+              memory because either it is still running, or procmgr has bugs
+              (see also ``?!``).
+``?!``        An inconsistent state which should never be seen was
+              encountered. File a bug report.
+============= ===============================================================
 
 Configuration
 =============
