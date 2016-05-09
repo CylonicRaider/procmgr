@@ -19,6 +19,8 @@
 #define REQUEST_DIHTR 2
 /* Drop if (the program) has not to run */
 #define REQUEST_DIHNTR 4
+/* Do not update program flags */
+#define REQUEST_NOFLAGS 8
 
 /* get_reply() encountered an error */
 #define REPLY_ERROR 65535

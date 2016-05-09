@@ -192,11 +192,13 @@ int request_run(struct request *request) {
         }
     }
     /* Update flags */
-    if (request->action == prog->act_start ||
-            request->action == prog->act_restart) {
-        prog->flags |= PROG_RUNNING;
-    } else if (request->action == prog->act_stop) {
-        prog->flags &= ~PROG_RUNNING;
+    if (! (request->flags & REQUEST_NOFLAGS)) {
+        if (request->action == prog->act_start ||
+                request->action == prog->act_restart) {
+            prog->flags |= PROG_RUNNING;
+        } else if (request->action == prog->act_stop) {
+            prog->flags &= ~PROG_RUNNING;
+        }
     }
     /* Do something */
     if (! request->action->command) {
@@ -222,7 +224,7 @@ int request_run(struct request *request) {
             /* Call another action using this request */
             request->action = prog->act_stop;
             request->argv = NULL;
-            request->flags |= REQUEST_NOREPLY;
+            request->flags |= REQUEST_NOREPLY | REQUEST_NOFLAGS;
             ret = request_run(request);
             if (ret == -1) goto error;
             /* Dispatch follow-up action */

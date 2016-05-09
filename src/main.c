@@ -296,7 +296,8 @@ int server_main(struct config *config, int background, char *pidfile,
                                 logerr(FATAL, "Failed to schedule request");
                                 goto commerr;
                             }
-                        } else if (prog->flags & PROG_REMOVE) {
+                        } else if (prog->flags & PROG_REMOVE &&
+                                ! (prog->flags & PROG_RUNNING)) {
                             /* Garbage-collect removed programs */
                             config_remove(config, prog);
                         }
