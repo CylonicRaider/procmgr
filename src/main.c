@@ -25,7 +25,8 @@
 
 /* Usage and help */
 const char *USAGE = "USAGE: " PROGNAME " [-h|-V] [-c conffile] [-l log] [-L "
-    "level] [-P pidfile] [-d [-f]|-t|-s|-r] [program action [args ...]]\n";
+    "level] [-P pidfile] [-d [-f]|-t|-s|-r|-a|-A] [program action [args "
+    "...]]\n";
 const char *HELP =
     "-h: (--help) This help\n"
     "-V: (--version) Print version (" VERSION ")\n"
@@ -44,6 +45,8 @@ const char *HELP =
     "-s: (--stop) Signal the daemon (if any running) to stop\n"
     "-r: (--reload) Signal the daemon (if any running) to reload its\n"
     "    configuration\n"
+    "-a: (--all) List the status of all programs\n"
+    "-A: (--all-null) List the status of all programs, with NUL delimiters\n"
     "If none of -dftsr are supplied, program and action must be present,\n"
     "and contain the program and action to invoke; additional command-line\n"
     "arguments may be passed to those. If no -l option is specified,\n"
@@ -134,7 +137,7 @@ void usage(int help, int retcode) {
 static void notifier(int signum) {
     unsigned char sn = signum;
     int res = write(sigpipe[1], &sn, 1);
-    /* YES, I'm USING it. */
+    /* YES, I'm USING it! */
     (void) res;
 }
 
@@ -394,7 +397,7 @@ int server_main(struct config *config, int background, char *pidfile,
                     if (! main_senderr(config, &addr, "EPERM",
                             "Permission denied"))
                         goto commerr;
-                    continue;
+                    goto msgend;
                 }
                 /* Drop a note */
                 log_request(req);
@@ -405,6 +408,42 @@ int server_main(struct config *config, int background, char *pidfile,
                 }
                 /* Dispose of request */
                 request_free(req);
+            } else if (strcmp(msg.fields[0], "LIST") == 0) {
+                struct program *p;
+                int l = 1;
+                char **data;
+                /* Query status of all programs */
+                if (msg.fieldnum != 1) {
+                    if (! main_senderr(config, &addr, "BADMSG", "Bad message"))
+                        goto commerr;
+                    goto msgend;
+                }
+                /* Allocate result array */
+                for (p = config->programs; p; p = p->next) l++;
+                l *= 2;
+                data = calloc(l, sizeof(char *));
+                if (! data) {
+                    logerr(FATAL, "Failed to allocate memory");
+                    goto commerr;
+                }
+                /* Drain data into it */
+                data[0] = "LISTING";
+                l = 1;
+                for (p = config->programs; p; p = p->next, l += 2) {
+                    data[l] = p->name;
+                    data[l + 1] = (p->pid == -1) ? "dead" : "running";
+                }
+                /* Send reply */
+                msg2.fieldnum = l;
+                msg2.fields = data;
+                if (comm_send(config->socket, &msg2, &addr,
+                              COMM_DONTWAIT) == -1) {
+                    logerr(FATAL, "Failed to send message");
+                    free(data);
+                    goto commerr;
+                }
+                /* Clean up */
+                free(data);
             } else {
                 if (! main_senderr(config, &addr, "BADCMD",
                         "No such command"))
@@ -422,7 +461,8 @@ int server_main(struct config *config, int background, char *pidfile,
                 }
             }
             /* Clean message */
-            comm_del(&msg);
+            msgend:
+                comm_del(&msg);
         }
         /* Run unbound jobs */
         do {
@@ -450,12 +490,15 @@ int server_main(struct config *config, int background, char *pidfile,
 int client_main(struct config *config, enum cmdaction action, char *argv[]) {
     char *cmd, *param, **data, *buf[3];
     int res, l;
+    struct strarr replydata = { 0, NULL };
     /* Determine which command to send */
     switch (action) {
-        case SPAWN : cmd = "RUN"   ; param = NULL      ; break;
-        case RELOAD: cmd = "SIGNAL"; param = "reload"  ; break;
-        case TEST  : cmd = "PING"  ; param = NULL      ; break;
-        case STOP  : cmd = "SIGNAL"; param = "shutdown"; break;
+        case SPAWN    : cmd = "RUN"   ; param = NULL      ; break;
+        case RELOAD   : cmd = "SIGNAL"; param = "reload"  ; break;
+        case TEST     : cmd = "PING"  ; param = NULL      ; break;
+        case STOP     : cmd = "SIGNAL"; param = "shutdown"; break;
+        case LIST     : cmd = "LIST"  ; param = NULL      ; break;
+        case LIST_NULL: cmd = "LIST"  ; param = NULL      ; break;
         default:
             fprintf(stderr, "Internal error\n");
             return 1;
@@ -497,14 +540,10 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
         return 1;
     }
     /* Obtain reply */
-    res = get_reply(config, 0);
+    res = get_reply(config, &replydata, 0);
     if (res == REPLY_ERROR) {
-        if (errno) {
-            perror("Error while receiving reply");
-            return 1;
-        } else {
-            res = 1;
-        }
+        if (errno) perror("Error while receiving reply");
+        res = 1;
     } else if (action == TEST) {
         if (res == 0) {
             printf("running\n");
@@ -513,8 +552,41 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
             printf("experiencing problems\n");
             fflush(stdout);
         }
+    } else if (action == LIST || action == LIST_NULL) {
+        if (res != 0 || strcmp(replydata.data[0], "LISTING") != 0) {
+            fprintf(stderr, "Got bad reply\n");
+            res = 1;
+            goto end;
+        }
+        /* Print listing */
+        if (action == LIST) {
+            /* Calculate display width */
+            int w = 0;
+            for (l = 1; l < replydata.len; l += 2) {
+                int ll = strlen(replydata.data[l]);
+                if (ll > w) w = ll;
+            }
+            w++;
+            /* Write columns */
+            for (l = 1; l < replydata.len; l += 2) {
+                printf("%.*s: %s\n", w, replydata.data[l],
+                       replydata.data[l + 1]);
+            }
+        } else {
+            for (l = 1; l < replydata.len; l++) {
+                fputs(replydata.data[l], stdout);
+                putchar((action == LIST_NULL) ? '\0' : (l % 2 == 0) ? '\t' :
+                    '\n');
+            }
+        }
     }
-    return res;
+    end:
+        /* Clean up */
+        if (replydata.data) {
+            for (l = 0; l < replydata.len; l++) free(replydata.data[l]);
+            free(replydata.data);
+        }
+        return res;
 }
 
 /* Main function */
@@ -590,6 +662,10 @@ int main(int argc, char *argv[]) {
                 action = STOP;
             } else if (strcmp(arg, "reload") == 0) {
                 action = RELOAD;
+            } else if (strcmp(arg, "all") == 0) {
+                action = LIST;
+            } else if (strcmp(arg, "all-null") == 0) {
+                action = LIST_NULL;
             } else {
                 fprintf(stderr, "Unknown option: '--%s'\n", arg);
                 return 1;
@@ -666,6 +742,12 @@ int main(int argc, char *argv[]) {
                 break;
             case 'r':
                 action = RELOAD;
+                break;
+            case 'a':
+                action = LIST;
+                break;
+            case 'A':
+                action = LIST_NULL;
                 break;
             default:
                 fprintf(stderr, "Unknown option: '-%c'\n", opt);

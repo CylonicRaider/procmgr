@@ -51,6 +51,16 @@ struct request {
     int flags;
 };
 
+/* String array
+ * Members:
+ * len : (int) The length of *data (in elements, like sizeof(*data) /
+ *       sizeof(**data)).
+ * data: (char **) The actual data. */
+struct strarr {
+    int len;
+    char **data;
+};
+
 /* Create a request from the given message
  * It is assumed that the message was verified to contain an appropriate
  * command.
@@ -117,13 +127,16 @@ int run_jobs(struct config *config, int pid, int retcode);
 int send_request(struct config *config, char **argv, int flags);
 
 /* Wait for a message to arrive and return the desired return code
- * flags are passed to the comm_*() functions.
+ * flags are passed to the comm_*() functions. If data is not NULL, the
+ * fields from the message received are moved into it if everything succeeds
+ * (otherwise, data is unchanged), making the caller responsible for
+ * deallocating them.
  * The return value is either the return code (if everything succeeds), which
  * can be in the range [-255..255], or the constant REPLY_ERROR if a fatal
  * error happened, with errno set properly. In the latter case, errno may
  * by zero ("Success"), indicating that an error message was received and
  * written to standard error. */
-int get_reply(struct config *config, int flags);
+int get_reply(struct config *config, struct strarr *data, int flags);
 
 /* Close all file descriptors not less than minfd */
 int close_from(int minfd);

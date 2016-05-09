@@ -415,7 +415,8 @@ int send_request(struct config *config, char **argv, int flags) {
         if (msg.fieldnum != 2) return 0;
         if (strcmp(argv[1], "reload") != 0 &&
             strcmp(argv[1], "shutdown") != 0) return 0;
-    } else if (strcmp(argv[0], "PING") == 0) {
+    } else if (strcmp(argv[0], "PING") == 0 ||
+            strcmp(argv[0], "LIST") == 0) {
         if (msg.fieldnum > 2) return 0;
     } else {
         return 0;
@@ -437,18 +438,18 @@ int send_request(struct config *config, char **argv, int flags) {
 }
 
 /* Wait for a message to arrive and return the desired return code */
-int get_reply(struct config *config, int flags) {
+int get_reply(struct config *config, struct strarr *data, int flags) {
     struct ctlmsg msg = CTLMSG_INIT;
     int ret;
     char *end;
     /* Receive! */
     ret = comm_recv(config->socket, &msg, NULL, flags);
-    /* Abort on error. */
+    /* Abort on error */
     if (ret < 0) {
         ret = REPLY_ERROR;
         goto end;
     }
-    /* Check if the reply is most basically valid. */
+    /* Check if the reply is most basically valid */
     if (msg.fieldnum < 1) {
         fprintf(stderr, "ERROR: Bad message received\n");
         goto error;
@@ -462,24 +463,40 @@ int get_reply(struct config *config, int flags) {
         fprintf(stderr, "ERROR: (%s) %s\n", msg.fields[1], msg.fields[2]);
         goto error;
     }
-    /* Obtain return value */
-    if (msg.fieldnum == 1) {
-        ret = 0;
-    } else {
-        errno = 0;
-        ret = strtol(msg.fields[1], &end, 0);
-        if (errno || *end) {
-            fprintf(stderr, "ERROR: Invalid number in message\n");
+    /* Command-specific action */
+    if (strcmp(msg.fields[0], "OK") == 0) {
+        /* Obtain return value */
+        if (msg.fieldnum == 1) {
+            ret = 0;
+        } else {
+            errno = 0;
+            ret = strtol(msg.fields[1], &end, 0);
+            if (errno || *end) {
+                fprintf(stderr, "ERROR: Invalid number in message\n");
+                goto error;
+            }
+        }
+        /* Check if it is in range */
+        if (ret <= -256 || ret >= 256) {
+            fprintf(stderr, "ERROR: Number out of bounds\n");
             goto error;
         }
-    }
-    /* Check if it is in range. */
-    if (ret <= -256 || ret >= 256) {
-        fprintf(stderr, "ERROR: Number out of bounds\n");
+    } else if (strcmp(msg.fields[0], "LISTING") == 0) {
+        /* Verify adequate length */
+        ret = (msg.fieldnum % 2 == 1) ? 0 : 1;
+    } else {
+        fprintf(stderr, "ERROR: Bad message received\n");
         goto error;
     }
+    /* Drain data section */
+    if (data) {
+        data->len = msg.fieldnum;
+        data->data = msg.fields;
+        msg.fieldnum = 0;
+        msg.fields = NULL;
+    }
     goto end;
-    /* Done. */
+    /* Done */
     error:
         ret = REPLY_ERROR;
         errno = 0;

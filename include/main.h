@@ -16,7 +16,7 @@
 #define DEFAULT_CONFFILE "/etc/procmgr.cfg"
 
 /* Action the main() routing can perform */
-enum cmdaction { SPAWN, TEST, STOP, RELOAD };
+enum cmdaction { SPAWN, TEST, STOP, RELOAD, LIST, LIST_NULL };
 
 /* Server main loop
  * background specifies whether to fork into background. pidfile is either
