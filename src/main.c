@@ -275,8 +275,8 @@ int server_main(struct config *config, int background, char *pidfile,
                             prog->name, prog->pid, retcode,
                             (prog->delay > 0 && prog->flags & PROG_RUNNING) ?
                                 "; will restart" : "");
-                        prog->pid = -1;
                         logmsg(NOTE, msgbuf);
+                        prog->pid = -1;
                     }
                     /* Run jobs */
                     run_jobs(config, pid, retcode);

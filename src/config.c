@@ -121,6 +121,8 @@ int config_update(struct config *conf, int quiet) {
     }
     conf->def_uid = -1;
     conf->def_gid = -1;
+    conf->def_suid = -1;
+    conf->def_sgid = -1;
     /* Parse global members */
     sec = conffile_get_last(conf->conffile, NULL);
     if (sec) {
