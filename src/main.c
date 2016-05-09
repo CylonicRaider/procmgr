@@ -103,6 +103,19 @@ void log_request(struct request *request) {
     logmsg(INFO, msgbuf);
 }
 
+/* Send an error message to the given client and return whether successful
+ * Logs an message in case of failure */
+int main_senderr(struct config *config, struct addr *addr, char *code,
+                 char *desc) {
+    if (comm_senderr(config->socket, code, desc, addr,
+                     COMM_DONTWAIT) == -1) {
+        logerr(FATAL, "Could not send error message");
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
 /* Abort program execution with the given error message along with
  * strerror(errno) */
 void die(char *func) {
@@ -308,19 +321,13 @@ int server_main(struct config *config, int background, char *pidfile,
             /* Act upon them */
             if (msg.fieldnum == 0) {
                 /* No command? Cannot really do anything */
-                if (comm_senderr(config->socket, "NOMSG", "Empty message",
-                                 &addr, COMM_DONTWAIT) == -1) {
-                    logerr(FATAL, "Failed to send message");
+                if (! main_senderr(config, &addr, "NOMSG", "Empty message"))
                     goto commerr;
-                }
             } else if (strcmp(msg.fields[0], "PING") == 0) {
                 /* Reply with a PONG */
                 if (msg.fieldnum > 2) {
-                    if (comm_senderr(config->socket, "BADMSG", "Bad message",
-                                     &addr, COMM_DONTWAIT) == -1) {
-                        logerr(FATAL, "Failed to send message");
+                    if (! main_senderr(config, &addr, "BADMSG", "Bad message"))
                         goto commerr;
-                    }
                 } else if (msg.fieldnum == 2) {
                     fields[0] = "PONG";
                     fields[1] = msg.fields[1];
@@ -330,19 +337,13 @@ int server_main(struct config *config, int background, char *pidfile,
             } else if (strcmp(msg.fields[0], "SIGNAL") == 0) {
                 /* Signal oneself, or fail */
                 if (msg.fieldnum != 2) {
-                    if (comm_senderr(config->socket, "BADMSG", "Bad message",
-                                     &addr, COMM_DONTWAIT) == -1) {
-                        logerr(FATAL, "Failed to send message");
+                    if (! main_senderr(config, &addr, "BADMSG", "Bad message"))
                         goto commerr;
-                    }
                 } else if (msg.creds.uid != 0 &&
                            msg.creds.uid != geteuid()) {
-                    if (comm_senderr(config->socket, "EPERM",
-                                     "Permission denied", &addr,
-                                     COMM_DONTWAIT) == -1) {
-                        logerr(FATAL, "Failed to send message");
+                    if (! main_senderr(config, &addr, "EPERM",
+                            "Permission denied"))
                         goto commerr;
-                    }
                 } else if (strcmp(msg.fields[1], "reload") == 0) {
                     char msgbuf[128];
                     snprintf(msgbuf, sizeof(msgbuf), "Reloading on behalf "
@@ -366,11 +367,9 @@ int server_main(struct config *config, int background, char *pidfile,
                     }
                     fields[0] = "OK";
                 } else {
-                    if (comm_senderr(config->socket, "BADMSG", "Bad message",
-                                     &addr, COMM_DONTWAIT) == -1) {
-                        logerr(FATAL, "Failed to send message");
+                    if (! main_senderr(config, &addr, "BADMSG",
+                            "Bad message"))
                         goto commerr;
-                    }
                 }
                 /* The signal handler will have only written to pipe, so we
                  * can reply safely. */
@@ -391,11 +390,9 @@ int server_main(struct config *config, int background, char *pidfile,
                     goto commerr;
                 }
                 if (! res) {
-                    if (comm_senderr(config->socket, "EPERM", "Permission denied",
-                                     &addr, COMM_DONTWAIT) == -1) {
-                        logerr(FATAL, "Failed to send message");
+                    if (! main_senderr(config, &addr, "EPERM",
+                            "Permission denied"))
                         goto commerr;
-                    }
                     continue;
                 }
                 /* Drop a note */
@@ -408,11 +405,9 @@ int server_main(struct config *config, int background, char *pidfile,
                 /* Dispose of request */
                 request_free(req);
             } else {
-                if (comm_senderr(config->socket, "BADCMD", "No such command",
-                                 &addr, COMM_DONTWAIT) == -1) {
-                    logerr(FATAL, "Failed to send message");
+                if (! main_senderr(config, &addr, "BADCMD",
+                        "No such command"))
                     goto commerr;
-                }
             }
             /* Common replying code */
             if (fields[0]) {
