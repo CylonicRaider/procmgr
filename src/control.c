@@ -415,8 +415,9 @@ int send_request(struct config *config, char **argv, int flags) {
         if (msg.fieldnum != 2) return 0;
         if (strcmp(argv[1], "reload") != 0 &&
             strcmp(argv[1], "shutdown") != 0) return 0;
-    } else if (strcmp(argv[0], "PING") == 0 ||
-            strcmp(argv[0], "LIST") == 0) {
+    } else if (strcmp(argv[0], "LIST") == 0) {
+        if (msg.fieldnum != 1) return 0;
+    } else if (strcmp(argv[0], "PING") == 0) {
         if (msg.fieldnum > 2) return 0;
     } else {
         return 0;
@@ -484,6 +485,8 @@ int get_reply(struct config *config, struct strarr *data, int flags) {
     } else if (strcmp(msg.fields[0], "LISTING") == 0) {
         /* Verify adequate length */
         ret = (msg.fieldnum % 2 == 1) ? 0 : 1;
+    } else if (strcmp(msg.fields[0], "PONG") == 0) {
+        ret = 0;
     } else {
         fprintf(stderr, "ERROR: Bad message received\n");
         goto error;
