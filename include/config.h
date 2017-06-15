@@ -28,6 +28,7 @@
  *     sgid-<action> = <GID to switch to when performing the action>
  *     cwd = <directory to switch to before performing actions>
  *     restart-delay = <seconds after which approximately to restart>
+ *     autostart = <yes, no, or integer autostart group>
  *
  * For the UID and GID fields, and restart-delay, the special value "none"
  * (which is equal to -1) may be used, indicating that no UID/GID should be
@@ -35,7 +36,13 @@
  * staying at the UID/GID the daemon itself had), or that the program should
  * not be automatically restarted (as it happens for every non-positive value
  * of restart-delay), respectively. cwd is only set at program level since an
- * individual command can change its directory itself.
+ * individual command can change its directory itself. autostart tells
+ * procmgr to automatically start a process (or not). The value "no" is
+ * aliased to 0, which is a special autostart group that is not, in fact,
+ * auto-started; "yes" is aliased to 1, which is the group auto-started as
+ * default. Other autostart groups can be specified as well and selected
+ * using the corresponding command line switch, for example for an emergency
+ * or maintenance run.
  * Arbitrarily many program sections can be specified; out of same-named
  * ones, only the last is considered; similarly for all values. Spacing
  * between sections is purely decorational, although it increases legibility.
@@ -126,6 +133,9 @@ struct config {
  *              or -1 if none.
  * flags      : (int) Flags. See the PROG_* constants for descriptions.
  * delay      : (int) Restart delay in seconds.
+ * autostart  : (int) Autostart group. 0 is "no autostart" (the default for
+ *              a configuration entry), 1 is the "standard" one (selected by
+ *              the server as default); must be nonnegative.
  * cwd        : (char *) Working directory to start actions in (unspecified
  *              if NULL).
  * prev, next : (struct program *) Linked list interconnection.
@@ -153,6 +163,7 @@ struct program {
     int pid;
     int flags;
     int delay;
+    int autostart;
     char *cwd;
     struct program *prev, *next;
     struct action *act_start;

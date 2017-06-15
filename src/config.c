@@ -300,9 +300,11 @@ struct program *prog_new(struct config *conf, struct section *config) {
         if (pair && ! parse_int(&def_suid, pair->value, 1)) goto error;
         pair = section_get_last(config, "default-sgid");
         if (pair && ! parse_int(&def_sgid, pair->value, 1)) goto error;
-        /* Set restarting delay */
+        /* Set restarting delay and autostart group */
         pair = section_get_last(config, "restart-delay");
         if (pair && ! parse_int(&ret->delay, pair->value, 1)) goto error;
+        pair = section_get_last(config, "autostart");
+        if (pair && ! parse_int(&ret->autostart, pair->value, 2)) goto error;
         /* Set CWD */
         pair = section_get_last(config, "cwd");
         if (pair) {
@@ -395,13 +397,21 @@ void prog_free(struct program *prog) {
     if (prog_del(prog)) free(prog);
 }
 
-/* Parse an integer literal ("none" maps to -1 if accept_none is one)
+/* Parse an integer literal
+ * "none" maps to -1 if accept_none's 1 bit is set; "yes" and "no" map to 1
+ * and 0, respectively, if the 2 bit is set.
  * Returns whether successful; errno is set if not. */
 int parse_int(int *ret, char *data, int accept_none) {
     char *end;
     int temp;
-    if (accept_none == 1 && strcmp(data, "none") == 0) {
+    if (accept_none & 1 && strcmp(data, "none") == 0) {
         *ret = -1;
+        return 1;
+    } else if (accept_none & 2 && strcmp(data, "no") == 0) {
+        *ret = 0;
+        return 1;
+    } else if (accept_none & 2 && strcmp(data, "yes") == 0) {
+        *ret = 1;
         return 1;
     }
     errno = 0;
