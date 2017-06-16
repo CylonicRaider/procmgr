@@ -101,9 +101,16 @@ void log_request(struct request *request) {
     /* Cancel if action not found or not logged */
     if (! p->verb) return;
     /* Format message */
-    snprintf(msgbuf, sizeof(msgbuf), "%s program '%.128s' on behalf "
-        "of {PID=%d,UID=%d,GID=%d}", p->verb, request->program->name,
-        request->creds.pid, request->creds.uid, request->creds.gid);
+    snprintf(msgbuf, sizeof(msgbuf), "%s program '%.128s' on behalf of ",
+             p->verb, request->program->name);
+    if (request->creds.pid == -1) {
+        strcat(msgbuf, "self");
+    } else {
+        int len = strlen(msgbuf);
+        snprintf(msgbuf + len, sizeof(msgbuf) - len, "{PID=%d,UID=%d,"
+                 "GID=%d}", request->creds.pid, request->creds.uid,
+                 request->creds.gid);
+    }
     /* Output it */
     logmsg(INFO, msgbuf);
 }
@@ -840,7 +847,7 @@ int main(int argc, char *argv[]) {
     /* Create configuration */
     config = create_config(conffile);
     if (! config) die("Failed to load configuration");
-    config->autostart = autostart;
+    if (autostart != -1) config->autostart = autostart;
     /* Main... branch */
     if (server) {
         /* Prepare logging */
