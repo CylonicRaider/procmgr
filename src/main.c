@@ -211,6 +211,29 @@ int server_main(struct config *config, int background, char *pidfile,
     /* Final preparations */
     FD_ZERO(&readfds);
     logmsg(NOTE, PROGNAME " started");
+    /* Schedule autostarts */
+    if (config->autostart) {
+        int progs = 0;
+        struct program *prog;
+        for (prog = config->programs; prog; prog = prog->next) {
+            if (prog->autostart == config->autostart) {
+                struct request *req = request_synth(config, prog, "start",
+                                                    NULL);
+                if (req == NULL) {
+                    logerr(FATAL, "Could not allocate memory");
+                    return 1;
+                }
+                log_request(req);
+                if (request_run(req) == -1) {
+                    logerr(FATAL, "Failed to process request");
+                    return 1;
+                }
+                request_free(req);
+                progs++;
+            }
+        }
+        if (progs) logmsg(NOTE, "Autostart finished");
+    }
     /* Main loop */
     for (;;) {
         int nfds, res;
