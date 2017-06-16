@@ -2,15 +2,14 @@
  * https://github.com/CylonicRaider/procmgr */
 
 #include <errno.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "logging.h"
 #include "config.h"
+#include "util.h"
 
 /* Static functions/constants */
-static int parse_int(int *ret, char *value, int accept_none);
 static struct action **action_pointer(struct program *prog, char *name);
 static void action_free(struct action **act);
 
@@ -141,7 +140,7 @@ int config_update(struct config *conf, int quiet) {
         /* Default UID */
         pair = section_get_last(sec, "allow-uid");
         if (pair) {
-            if (! parse_int(&value, pair->value, 1)) {
+            if (! parse_int(&value, pair->value, INTKWD_NONE)) {
                 if (! quiet) perror("Could not parse default UID");
                 return -2;
             }
@@ -150,7 +149,7 @@ int config_update(struct config *conf, int quiet) {
         /* Default GID */
         pair = section_get_last(sec, "allow-gid");
         if (pair) {
-            if (! parse_int(&value, pair->value, 1)) {
+            if (! parse_int(&value, pair->value, INTKWD_NONE)) {
                 if (! quiet) perror("Could not parse default GID");
                 return -2;
             }
@@ -159,7 +158,7 @@ int config_update(struct config *conf, int quiet) {
         /* Default SUID */
         pair = section_get_last(sec, "default-suid");
         if (pair) {
-            if (! parse_int(&value, pair->value, 1)) {
+            if (! parse_int(&value, pair->value, INTKWD_NONE)) {
                 if (! quiet) perror("Could not parse default SUID");
                 return -2;
             }
@@ -168,7 +167,7 @@ int config_update(struct config *conf, int quiet) {
         /* Default SGID */
         pair = section_get_last(sec, "default-sgid");
         if (pair) {
-            if (! parse_int(&value, pair->value, 1)) {
+            if (! parse_int(&value, pair->value, INTKWD_NONE)) {
                 if (! quiet) perror("Could not parse default SGID");
                 return -2;
             }
@@ -177,7 +176,7 @@ int config_update(struct config *conf, int quiet) {
         /* Autostart group to run */
         pair = section_get_last(sec, "do-autostart");
         if (pair) {
-            if (! parse_int(&value, pair->value, 2)) {
+            if (! parse_int(&value, pair->value, INTKWD_YESNO)) {
                 if (! quiet) perror("Could not parse do-autostart");
                 return -2;
             }
@@ -303,18 +302,24 @@ struct program *prog_new(struct config *conf, struct section *config) {
     if (config) {
         /* Update default UIDs and GIDs */
         pair = section_get_last(config, "allow-uid");
-        if (pair && ! parse_int(&def_uid, pair->value, 1)) goto error;
+        if (pair && ! parse_int(&def_uid, pair->value, INTKWD_NONE))
+            goto error;
         pair = section_get_last(config, "allow-gid");
-        if (pair && ! parse_int(&def_gid, pair->value, 1)) goto error;
+        if (pair && ! parse_int(&def_gid, pair->value, INTKWD_NONE))
+            goto error;
         pair = section_get_last(config, "default-suid");
-        if (pair && ! parse_int(&def_suid, pair->value, 1)) goto error;
+        if (pair && ! parse_int(&def_suid, pair->value, INTKWD_NONE))
+            goto error;
         pair = section_get_last(config, "default-sgid");
-        if (pair && ! parse_int(&def_sgid, pair->value, 1)) goto error;
+        if (pair && ! parse_int(&def_sgid, pair->value, INTKWD_NONE))
+            goto error;
         /* Set restarting delay and autostart group */
         pair = section_get_last(config, "restart-delay");
-        if (pair && ! parse_int(&ret->delay, pair->value, 1)) goto error;
+        if (pair && ! parse_int(&ret->delay, pair->value, INTKWD_NONE))
+            goto error;
         pair = section_get_last(config, "autostart");
-        if (pair && ! parse_int(&ret->autostart, pair->value, 2)) goto error;
+        if (pair && ! parse_int(&ret->autostart, pair->value, INTKWD_YESNO))
+            goto error;
         /* Set CWD */
         pair = section_get_last(config, "cwd");
         if (pair) {
@@ -342,16 +347,20 @@ struct program *prog_new(struct config *conf, struct section *config) {
         act->sgid = def_sgid;
         if (config) {
             pair = section_get_last(config, action_names[i].uid);
-            if (pair && ! parse_int(&act->allow_uid, pair->value, 1))
+            if (pair && ! parse_int(&act->allow_uid, pair->value,
+                                    INTKWD_NONE))
                 goto error;
             pair = section_get_last(config, action_names[i].gid);
-            if (pair && ! parse_int(&act->allow_gid, pair->value, 1))
+            if (pair && ! parse_int(&act->allow_gid, pair->value,
+                                    INTKWD_NONE))
                 goto error;
             pair = section_get_last(config, action_names[i].suid);
-            if (pair && ! parse_int(&act->suid, pair->value, 1))
+            if (pair && ! parse_int(&act->suid, pair->value,
+                                    INTKWD_NONE))
                 goto error;
             pair = section_get_last(config, action_names[i].sgid);
-            if (pair && ! parse_int(&act->sgid, pair->value, 1))
+            if (pair && ! parse_int(&act->sgid, pair->value,
+                                    INTKWD_NONE))
                 goto error;
         }
         /* Insert into structure */
@@ -405,30 +414,6 @@ void prog_free(struct program *prog) {
         if (prog_del(cur)) free(cur);
     }
     if (prog_del(prog)) free(prog);
-}
-
-/* Parse an integer literal
- * "none" maps to -1 if accept_none's 1 bit is set; "yes" and "no" map to 1
- * and 0, respectively, if the 2 bit is set.
- * Returns whether successful; errno is set if not. */
-int parse_int(int *ret, char *data, int accept_none) {
-    char *end;
-    int temp;
-    if (accept_none & 1 && strcmp(data, "none") == 0) {
-        *ret = -1;
-        return 1;
-    } else if (accept_none & 2 && strcmp(data, "no") == 0) {
-        *ret = 0;
-        return 1;
-    } else if (accept_none & 2 && strcmp(data, "yes") == 0) {
-        *ret = 1;
-        return 1;
-    }
-    errno = 0;
-    temp = strtol(data, &end, 0);
-    if (errno || *end) return 0;
-    *ret = temp;
-    return 1;
 }
 
 /* Return the action named by name from prog, or NULL if none */

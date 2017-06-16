@@ -25,29 +25,31 @@
 
 /* Usage and help */
 const char *USAGE = "USAGE: " PROGNAME " [-h|-V] [-c conffile] [-l log] [-L "
-    "level] [-P pidfile] [-d [-f]|-t|-s|-r|-a [-0]] [program action [args "
-    "...]]\n";
+    "level] [-P pidfile] [-d [-f] [-A autostart]|-t|-s|-r|-a [-0]] [program "
+    "action [args ...]]\n";
 const char *HELP =
-    "-h: (--help) This help\n"
-    "-V: (--version) Print version (" VERSION ")\n"
-    "-c: (--config) Configuration file location (defaults to environment\n"
+    "-h: (--help) This help.\n"
+    "-V: (--version) Print version (" VERSION ").\n"
+    "-c: (--config) Configuration file location (defaults to environment.\n"
     "    variable PROCMGR_CONFFILE, or to " DEFAULT_CONFFILE " if not\n"
-    "    set)\n"
+    "    set).\n"
     "-l: (--log log) Syslog facility to log to, or the string \"stderr\".\n"
     "    Facility keywords override each other, \"stderr\" is a flag.\n"
     "-L: (--loglevel level) Minimum severity of messages to log. level is\n"
     "    one of DEBUG, INFO, NOTE (default), WARN, ERROR, CRITICAL, FATAL.\n"
     "-P: (--pid pidfile) Write PID file to given path.\n"
     "-d: (--daemon) Start daemon (as opposed to the default \"client\"\n"
-    "    mode)\n"
-    "-f: (--foreground) Stay in foreground (daemon mode only)\n"
-    "-t: (--test) Check whether the daemon is running\n"
-    "-s: (--stop) Signal the daemon (if any running) to stop\n"
+    "    mode).\n"
+    "-f: (--foreground) Stay in foreground (daemon mode only).\n"
+    "-A: (--autostart) Start the specified autostart group (\"yes\" for\n"
+    "    default, \"no\" for none; daemon mode only).\n"
+    "-t: (--test) Check whether the daemon is running.\n"
+    "-s: (--stop) Signal the daemon (if any running) to stop.\n"
     "-r: (--reload) Signal the daemon (if any running) to reload its\n"
-    "    configuration\n"
-    "-a: (--all) List the status of all programs\n"
-    "-0: (--null) Use NUL characters as list delimiters\n"
-    "If none of -dftsr are supplied, program and action must be present,\n"
+    "    configuration.\n"
+    "-a: (--all) List the status of all programs.\n"
+    "-0: (--null) Use NUL characters as list delimiters.\n"
+    "If none of -dftsra are supplied, program and action must be present,\n"
     "and contain the program and action to invoke; additional command-line\n"
     "arguments may be passed to those. If no -l option is specified,\n"
     "nothing is logged (except fatal messages, which are always copied to\n"
@@ -598,7 +600,7 @@ int main(int argc, char *argv[]) {
     char *conffile = NULL, *pidfile = NULL, **args = NULL;
     FILE *logfp = NULL;
     char *logslevel = NULL, *logfacility = NULL;
-    int logilevel = NOTE;
+    int logilevel = NOTE, autostart = -1;
     struct client_action action = { SPAWN, 0 };
     struct opt opts;
     struct logging_syslog syslogopts;
@@ -659,6 +661,18 @@ int main(int argc, char *argv[]) {
                 server = 1;
             } else if (strcmp(arg, "foreground") == 0) {
                 background = 0;
+            } else if (strcmp(arg, "autostart") == 0) {
+                char *val = getarg(&opts, 0);
+                if (! val) {
+                    fprintf(stderr, "Missing required argument for '--%s'\n",
+                            arg);
+                    usage(0, 2);
+                }
+                if (! parse_int(&autostart, val, 2)) {
+                    fprintf(stderr, "Invalid argument for '--%s'\n",
+                            arg);
+                    usage(0, 2);
+                }
             } else if (strcmp(arg, "test") == 0) {
                 action.action = TEST;
             } else if (strcmp(arg, "stop") == 0) {
@@ -737,6 +751,19 @@ int main(int argc, char *argv[]) {
             case 'f':
                 background = 0;
                 break;
+            case 'A':
+                arg = getarg(&opts, 0);
+                if (! arg) {
+                    fprintf(stderr, "Missing required argument for '-%c'\n",
+                            opt);
+                    usage(0, 2);
+                }
+                if (! parse_int(&autostart, arg, INTKWD_YESNO)) {
+                    fprintf(stderr, "Invalid argument for '-%c'\n",
+                            opt);
+                    usage(0, 2);
+                }
+                break;
             case 't':
                 action.action = TEST;
                 break;
@@ -749,7 +776,7 @@ int main(int argc, char *argv[]) {
             case 'a':
                 action.action = LIST;
                 break;
-            case 'A':
+            case '0':
                 action.flags |= CLIENTACT_NULSEP;
                 break;
             default:
@@ -790,6 +817,7 @@ int main(int argc, char *argv[]) {
     /* Create configuration */
     config = create_config(conffile);
     if (! config) die("Failed to load configuration");
+    config->autostart = autostart;
     /* Main... branch */
     if (server) {
         /* Prepare logging */

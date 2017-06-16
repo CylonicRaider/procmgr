@@ -2,6 +2,9 @@
  * https://github.com/CylonicRaider/procmgr */
 
 #include <math.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
 
@@ -23,4 +26,25 @@ int daemonize() {
     if (pid != 0) _exit(0);
     if (setsid() == -1) return -1;
     return chdir("/");
+}
+
+/* Parse an integer, optionally interpreting certain keywords */
+int parse_int(int *ret, char *data, int keywords) {
+    char *end;
+    int temp;
+    if (keywords & INTKWD_NONE && strcmp(data, "none") == 0) {
+        *ret = -1;
+        return 1;
+    } else if (keywords & INTKWD_YESNO && strcmp(data, "no") == 0) {
+        *ret = 0;
+        return 1;
+    } else if (keywords & INTKWD_YESNO && strcmp(data, "yes") == 0) {
+        *ret = 1;
+        return 1;
+    }
+    errno = 0;
+    temp = strtol(data, &end, 0);
+    if (errno || *end) return 0;
+    *ret = temp;
+    return 1;
 }
