@@ -15,6 +15,7 @@
  *     allow-gid = <similar to allow-uid>
  *     default-suid = <default UID to switch to>
  *     default-sgid = <default GID to switch to>
+ *     do-autostart = <autostart group to run>
  *
  *     [prog-<name>]
  *     allow-uid = <default UID for all uid-* in this section>
@@ -39,10 +40,12 @@
  * individual command can change its directory itself. autostart tells
  * procmgr to automatically start a process (or not). The value "no" is
  * aliased to 0, which is a special autostart group that is not, in fact,
- * auto-started; "yes" is aliased to 1, which is the group auto-started as
- * default. Other autostart groups can be specified as well and selected
- * using the corresponding command line switch, for example for an emergency
- * or maintenance run.
+ * auto-started; "yes" is aliased to 1. Other autostart groups can be
+ * specified as well, for example for an emergency or a maintenance profile.
+ * The global do-autostart value specifies which autostart group to run (and
+ * can be overridden using the corresponding command-line option); the
+ * default is 1, so that programs with autostart=yes actually start
+ * automatically.
  * Arbitrarily many program sections can be specified; out of same-named
  * ones, only the last is considered; similarly for all values. Spacing
  * between sections is purely decorational, although it increases legibility.
@@ -105,6 +108,7 @@ struct action;
  * def_gid   : (int) The default value for allow_gid in actions.
  * def_suid  : (int) The default value for suid in actions.
  * def_sgid  : (int) The default value for sgid in actions.
+ * autostart : (int) The effective autostart group.
  * conffile  : (struct conffile *) The configuration file underlying this
  *             configuration. May be NULL.
  * jobs      : (struct jobqueue *) The queue of pending jobs.
@@ -118,6 +122,7 @@ struct config {
     int def_gid;
     int def_suid;
     int def_sgid;
+    int autostart;
     struct conffile *conffile;
     struct jobqueue *jobs;
     struct program *programs;

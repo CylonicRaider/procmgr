@@ -123,6 +123,7 @@ int config_update(struct config *conf, int quiet) {
     conf->def_gid = -1;
     conf->def_suid = -1;
     conf->def_sgid = -1;
+    conf->autostart = 1;
     /* Parse global members */
     sec = conffile_get_last(conf->conffile, NULL);
     if (sec) {
@@ -172,6 +173,15 @@ int config_update(struct config *conf, int quiet) {
                 return -2;
             }
             conf->def_sgid = value;
+        }
+        /* Autostart group to run */
+        pair = section_get_last(sec, "do-autostart");
+        if (pair) {
+            if (! parse_int(&value, pair->value, 2)) {
+                if (! quiet) perror("Could not parse do-autostart");
+                return -2;
+            }
+            conf->autostart = value;
         }
     }
     /* Mark all programs for removal (merged ones will have flag clear) */
