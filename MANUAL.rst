@@ -19,7 +19,7 @@ Command-line usage
 ==================
 
 **Usage**: ``procmgr [-h|-V] [-c conffile] [-l log] [-L level] [-P pidfile]
-[-d [-f]|-t|-s|-r] [program action [args ...]]``
+[-d [-f] [-A autostart]|-t|-s|-r|-a [-0]] [program action [args ...]]``
 
 ========================= ===================================================
 ``-h`` (``--help``)       This help.
@@ -38,6 +38,8 @@ Command-line usage
 ``-d`` (``--daemon``)     Start daemon (as opposed to the default "client"
                           mode).
 ``-f`` (``--foreground``) Stay in foreground (daemon mode only).
+``-A`` (``--autostart``)  Start the specified autostart group (``yes`` for
+                          the default, ``no`` for none; daemon mode only).
 ``-t`` (``--test``)       Check whether the daemon is running.
 ``-s`` (``--stop``)       Signal the daemon (if any running) to stop.
 ``-r`` (``--reload``)     Signal the daemon (if any running) to reload its
@@ -45,26 +47,25 @@ Command-line usage
 ``-a`` (``--all``)        List the status of all programs (not invoking the
                           ``status`` action). Output is in a nice tabular
                           form. See `Extended status`_.
-``-A`` (``--all-null``)   The same as ``-a``, but with the fields terminated
-                          by NUL-s.
+``-0`` (``--null``)       Use ``NUL`` characters as list delimiters.
 ========================= ===================================================
 
-If none of ``-dftsr`` are supplied, ``program`` and ``action`` must be
-present, and contain the program and action to invoke; additional
+If none of ``-dtsra`` are supplied, ``program`` and ``action`` must be
+present and contain the program and action to invoke; additional
 command-line arguments may be passed to those.
 
 If no ``-l`` option is specified, nothing is logged (except fatal messages,
 which are always copied to (at least) stderr). Logging happens only in server
-mode, in client mode, messages are written to stderr (and the settings are
+mode; in client mode, messages are written to stderr (and the settings are
 ignored).
 
 Extended status
 ---------------
 
-Accessed by the ``-a`` and ``-A`` command-line arguments, the ``extended
-status`` conveys information about procmgr's view of its programs. Output
-consists of two fields for each program, the program name and a
-space-separated list of tokens about its status.
+Accessed by the ``-a`` command-line arguments, th ``extended status`` conveys
+information about procmgr's view of its programs. Output consists of two
+fields for each program, the program name and a space-separated list of
+tokens about its status.
 
 ============= ===============================================================
 ``running``   The program is running.
@@ -72,8 +73,8 @@ space-separated list of tokens about its status.
 ``lingering`` The program has been removed from configuration, but remains in
               memory because either it is still running, or procmgr has bugs
               (see also ``?!``).
-``?!``        An inconsistent state which should never be seen was
-              encountered. File a bug report.
+``?!``        An inconsistent state (*i.e.* a dead lingering program) which
+              should never be seen was encountered. File a bug report.
 ============= ===============================================================
 
 Configuration
@@ -92,6 +93,7 @@ be taken as part of that section).
     allow-gid = <similar to allow-uid>
     default-suid = <default UID to switch to>
     default-sgid = <default GID to switch to>
+    do-autostart = <autostart group to run>
 
     [prog-<name>]
     allow-uid = <default UID for all uid-* in this section>
@@ -105,6 +107,7 @@ be taken as part of that section).
     sgid-<action> = <GID to switch to when performing the action>
     cwd = <directory to switch to before performing actions>
     restart-delay = <seconds after which approximately to restart>
+    autostart = <yes, no, or integer autostart group>
 
 For the UID and GID fields, and ``restart-delay``, the special value ``none``
 (which is equal to -1) may be used, indicating that no UID/GID should be
@@ -112,7 +115,15 @@ allowed to perform an action or be changed to when performing it (thus
 staying at the UID/GID the daemon itself had), or that the program should not
 be automatically restarted (as it happens for every non-positive value of
 restart-delay), respectively. ``cwd`` is only set at program level since an
-individual command can change its directory itself.
+individual command can change its directory itself. ``autostart`` tells
+procmgr to automatically start a process (or not). The value ``no`` is
+aliased to ``0``, which is a special autostart group that is not, in fact,
+auto-started; ``yes`` is aliased to ``1``. Other autostart groups can be
+specified as well, for example for an emergency or a maintenance profile.
+The global ``do-autostart`` value specifies which autostart group to run (and
+can be overridden using the corresponding command-line option); the
+default is ``1``, so that programs with ``autostart=yes`` actually start
+automatically.
 
 Arbitrarily many program sections can be specified; out of same-named
 ones, only the last is considered; similarly for all values. Spacing
@@ -201,9 +212,10 @@ streams are connected to those of the client that caused the action.
 Action execution
 ----------------
 
-Actions commands are run by ``ACTION_SHELL`` (``/bin/sh``), appended after
-a ``-c`` parameter; additional positional arguments are passed after
-commands. The environment is empty, save for the following variables:
+Actions commands are run by ``ACTION_SHELL`` (as specified at compile time;
+the upstream default is ``/bin/sh``), appended after a ``-c`` parameter;
+additional positional arguments are passed after commands. The environment is
+empty, save for the following variables:
 
 ============ ================================================================
 ``PATH``     The path to get executables from. All other ones must be fetched
@@ -219,9 +231,9 @@ commands. The environment is empty, save for the following variables:
 
 For an action to be allowed, either the UID or the GID specified in the
 configuration must match the UID or GID sent by the client (the built-in
-client sends the EUID and the EGID of its process, but this cannot be
-enforced), respectively, or the client must have an EUID of 0 (*i.e.*, be
-root).
+client sends the EUID and the EGID of its process; the real or saved UID/GID
+could be sent by a modified client as well), respectively, or the client must
+have an EUID of 0 (*i.e.*, be root).
 
 **Note:** Since only the "primary" group of a process is sent (and *can*
 be sent), it might be necessary to change the primary group of the client

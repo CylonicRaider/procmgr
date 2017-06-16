@@ -42,18 +42,18 @@ const char *HELP =
     "    mode).\n"
     "-f: (--foreground) Stay in foreground (daemon mode only).\n"
     "-A: (--autostart) Start the specified autostart group (\"yes\" for\n"
-    "    default, \"no\" for none; daemon mode only).\n"
+    "    the default, \"no\" for none; daemon mode only).\n"
     "-t: (--test) Check whether the daemon is running.\n"
     "-s: (--stop) Signal the daemon (if any running) to stop.\n"
     "-r: (--reload) Signal the daemon (if any running) to reload its\n"
     "    configuration.\n"
     "-a: (--all) List the status of all programs.\n"
     "-0: (--null) Use NUL characters as list delimiters.\n"
-    "If none of -dftsra are supplied, program and action must be present,\n"
+    "If none of -dtsra are supplied, program and action must be present,\n"
     "and contain the program and action to invoke; additional command-line\n"
     "arguments may be passed to those. If no -l option is specified,\n"
     "nothing is logged (except fatal messages, which are always copied to\n"
-    "(at least) stderr). Logging happens only in server mode, in client\n"
+    "(at least) stderr). Logging happens only in server mode; in client\n"
     "mode, messages are written to stderr.\n";
 
 /* Global data for signal handlers */
