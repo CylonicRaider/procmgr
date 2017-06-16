@@ -25,7 +25,7 @@
 
 /* Usage and help */
 const char *USAGE = "USAGE: " PROGNAME " [-h|-V] [-c conffile] [-l log] [-L "
-    "level] [-P pidfile] [-d [-f]|-t|-s|-r|-a|-A] [program action [args "
+    "level] [-P pidfile] [-d [-f]|-t|-s|-r|-a [-0]] [program action [args "
     "...]]\n";
 const char *HELP =
     "-h: (--help) This help\n"
@@ -46,7 +46,7 @@ const char *HELP =
     "-r: (--reload) Signal the daemon (if any running) to reload its\n"
     "    configuration\n"
     "-a: (--all) List the status of all programs\n"
-    "-A: (--all-null) List the status of all programs, with NUL delimiters\n"
+    "-0: (--null) Use NUL characters as list delimiters\n"
     "If none of -dftsr are supplied, program and action must be present,\n"
     "and contain the program and action to invoke; additional command-line\n"
     "arguments may be passed to those. If no -l option is specified,\n"
@@ -492,24 +492,24 @@ int server_main(struct config *config, int background, char *pidfile,
 }
 
 /* Client main function */
-int client_main(struct config *config, enum cmdaction action, char *argv[]) {
+int client_main(struct config *config, struct client_action action,
+                char *argv[]) {
     char *cmd, *param, **data, *buf[3];
     int res, l;
     struct strarr replydata = { 0, NULL };
     /* Determine which command to send */
-    switch (action) {
+    switch (action.action) {
         case SPAWN    : cmd = "RUN"   ; param = NULL      ; break;
         case RELOAD   : cmd = "SIGNAL"; param = "reload"  ; break;
         case TEST     : cmd = "PING"  ; param = NULL      ; break;
         case STOP     : cmd = "SIGNAL"; param = "shutdown"; break;
         case LIST     : cmd = "LIST"  ; param = NULL      ; break;
-        case LIST_NULL: cmd = "LIST"  ; param = NULL      ; break;
         default:
             fprintf(stderr, "Internal error\n");
             return 1;
     }
     /* Prepend command to arguments */
-    if (action == SPAWN) {
+    if (action.action == SPAWN) {
         l = 2;
         if (argv) for (data = argv; *data; data++) l++;
         data = calloc(l, sizeof(char *));
@@ -536,7 +536,7 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
     }
     /* Send command */
     res = send_request(config, data, 0);
-    if (action == SPAWN) free(data);
+    if (action.action == SPAWN) free(data);
     if (res == 0) {
         fprintf(stderr, "Invalid arguments\n");
         return 2;
@@ -549,7 +549,7 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
     if (res == REPLY_ERROR) {
         if (errno) perror("Error while receiving reply");
         res = 1;
-    } else if (action == TEST) {
+    } else if (action.action == TEST) {
         if (res == 0) {
             printf("running\n");
             fflush(stdout);
@@ -557,14 +557,14 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
             printf("experiencing problems\n");
             fflush(stdout);
         }
-    } else if (action == LIST || action == LIST_NULL) {
+    } else if (action.action == LIST) {
         if (res != 0 || strcmp(replydata.data[0], "LISTING") != 0) {
             fprintf(stderr, "Got bad reply\n");
             res = 1;
             goto end;
         }
         /* Print listing */
-        if (action == LIST) {
+        if (! (action.flags & CLIENTACT_NULSEP)) {
             /* Calculate display width */
             int w = 0;
             for (l = 1; l < replydata.len; l += 2) {
@@ -579,8 +579,7 @@ int client_main(struct config *config, enum cmdaction action, char *argv[]) {
         } else {
             for (l = 1; l < replydata.len; l++) {
                 fputs(replydata.data[l], stdout);
-                putchar((action == LIST_NULL) ? '\0' : (l % 2 == 0) ? '\t' :
-                    '\n');
+                putchar('\0');
             }
         }
     }
@@ -600,7 +599,7 @@ int main(int argc, char *argv[]) {
     FILE *logfp = NULL;
     char *logslevel = NULL, *logfacility = NULL;
     int logilevel = NOTE;
-    enum cmdaction action = SPAWN;
+    struct client_action action = { SPAWN, 0 };
     struct opt opts;
     struct logging_syslog syslogopts;
     struct config *config;
@@ -661,15 +660,15 @@ int main(int argc, char *argv[]) {
             } else if (strcmp(arg, "foreground") == 0) {
                 background = 0;
             } else if (strcmp(arg, "test") == 0) {
-                action = TEST;
+                action.action = TEST;
             } else if (strcmp(arg, "stop") == 0) {
-                action = STOP;
+                action.action = STOP;
             } else if (strcmp(arg, "reload") == 0) {
-                action = RELOAD;
+                action.action = RELOAD;
             } else if (strcmp(arg, "all") == 0) {
-                action = LIST;
-            } else if (strcmp(arg, "all-null") == 0) {
-                action = LIST_NULL;
+                action.action = LIST;
+            } else if (strcmp(arg, "null") == 0) {
+                action.flags |= CLIENTACT_NULSEP;
             } else {
                 fprintf(stderr, "Unknown option: '--%s'\n", arg);
                 return 1;
@@ -739,19 +738,19 @@ int main(int argc, char *argv[]) {
                 background = 0;
                 break;
             case 't':
-                action = TEST;
+                action.action = TEST;
                 break;
             case 's':
-                action = STOP;
+                action.action = STOP;
                 break;
             case 'r':
-                action = RELOAD;
+                action.action = RELOAD;
                 break;
             case 'a':
-                action = LIST;
+                action.action = LIST;
                 break;
             case 'A':
-                action = LIST_NULL;
+                action.flags |= CLIENTACT_NULSEP;
                 break;
             default:
                 fprintf(stderr, "Unknown option: '-%c'\n", opt);
@@ -760,7 +759,7 @@ int main(int argc, char *argv[]) {
     }
     /* Finish options; validate them */
     if (background == -1) background = server;
-    if (server && action != SPAWN) {
+    if (server && action.action != SPAWN) {
         fprintf(stderr, "Both daemon mode and an action specified\n");
         return 2;
     }

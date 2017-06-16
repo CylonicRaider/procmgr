@@ -15,8 +15,20 @@
 /* Default configuration file location */
 #define DEFAULT_CONFFILE "/etc/procmgr.cfg"
 
+#define CLIENTACT_NULSEP 1 /* Use machine-readable separators in listings */
+
 /* Action the main() routing can perform */
-enum cmdaction { SPAWN, TEST, STOP, RELOAD, LIST, LIST_NULL };
+enum cmdaction { SPAWN, TEST, STOP, RELOAD, LIST };
+
+/* Command structure for client_main()
+ * Members:
+ * action: (enum cmdaction) The actual action to perform.
+ * flags : (int) A bitmask of CLIENTACT_* constants.
+ */
+struct client_action {
+    enum cmdaction action;
+    int flags;
+};
 
 /* Server main loop
  * background specifies whether to fork into background. pidfile is either
@@ -31,6 +43,7 @@ int server_main(struct config *config, int background, char *pidfile,
  * action is the action to perform, argv is an array of command-line
  * arguments to pass.
  * Returns 0 on success, or a positive integer on failure. */
-int client_main(struct config *config, enum cmdaction action, char *argv[]);
+int client_main(struct config *config, struct client_action action,
+                char *argv[]);
 
 #endif
